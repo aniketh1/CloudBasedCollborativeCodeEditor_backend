@@ -1,20 +1,23 @@
 {
-  "name": "backend",
+  "name": "collaborative-code-editor-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend server for Cloud-Based Collaborative Code Editor",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": ["collaborative", "code-editor", "terminal", "websocket"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "@clerk/clerk-sdk-node": "^4.13.23",
-    "backend": "file:",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
