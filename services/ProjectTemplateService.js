@@ -1,0 +1,415 @@
+const fs = require('fs').promises;
+const path = require('path');
+const { spawn } = require('child_process');
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
+
+class ProjectTemplateService {
+  constructor() {
+    this.templates = {
+      react: {
+        name: 'React App',
+        setupCommand: 'npx create-react-app',
+        dependencies: ['react', 'react-dom'],
+        devDependencies: ['@vitejs/plugin-react'],
+        folderStructure: {
+          'src': {
+            'components': {},
+            'pages': {},
+            'hooks': {},
+            'utils': {},
+            'styles': {}
+          },
+          'public': {}
+        },
+        defaultFiles: {
+          'src/App.js': `import React from 'react';
+import './App.css';
+
+function App() {
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Welcome to {PROJECT_NAME}</h1>
+        <p>Edit src/App.js and save to reload.</p>
+      </header>
+    </div>
+  );
+}
+
+export default App;`,
+          'src/App.css': `.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}`
+        }
+      },
+      
+      nodejs: {
+        name: 'Node.js App',
+        setupCommand: 'npm init -y',
+        dependencies: ['express'],
+        devDependencies: ['nodemon'],
+        folderStructure: {
+          'src': {
+            'controllers': {},
+            'models': {},
+            'routes': {},
+            'middleware': {},
+            'utils': {}
+          },
+          'tests': {},
+          'config': {}
+        },
+        defaultFiles: {
+          'src/index.js': `const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Routes
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Welcome to {PROJECT_NAME} API!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(\`{PROJECT_NAME} server running on port \${PORT}\`);
+});`,
+          'package.json': `{
+  "name": "{PROJECT_NAME_LOWER}",
+  "version": "1.0.0",
+  "description": "A Node.js application",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \\"Error: no test specified\\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}`
+        }
+      },
+
+      vue: {
+        name: 'Vue.js App',
+        setupCommand: 'npm create vue@latest',
+        dependencies: ['vue'],
+        devDependencies: ['@vitejs/plugin-vue'],
+        folderStructure: {
+          'src': {
+            'components': {},
+            'views': {},
+            'router': {},
+            'stores': {},
+            'assets': {}
+          },
+          'public': {}
+        },
+        defaultFiles: {
+          'src/App.vue': `<template>
+  <div id="app">
+    <header>
+      <h1>Welcome to {PROJECT_NAME}</h1>
+      <p>A Vue.js application</p>
+    </header>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'App',
+  components: {
+  }
+}
+</script>
+
+<style>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  text-align: center;
+  color: #2c3e50;
+  margin-top: 60px;
+}
+</style>`
+        }
+      },
+
+      python: {
+        name: 'Python App',
+        setupCommand: 'python -m venv venv',
+        dependencies: ['flask'],
+        folderStructure: {
+          'src': {
+            'models': {},
+            'views': {},
+            'controllers': {},
+            'utils': {}
+          },
+          'tests': {},
+          'config': {}
+        },
+        defaultFiles: {
+          'main.py': `#!/usr/bin/env python3
+"""
+{PROJECT_NAME} - A Python application
+"""
+
+from flask import Flask, jsonify
+import os
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello():
+    return jsonify({
+        'message': 'Welcome to {PROJECT_NAME}!',
+        'status': 'running',
+        'version': '1.0.0'
+    })
+
+@app.route('/health')
+def health_check():
+    return jsonify({'status': 'healthy'})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=port)`,
+          'requirements.txt': `Flask==2.3.3
+python-dotenv==1.0.0`,
+          'README.md': `# {PROJECT_NAME}
+
+A Python Flask application.
+
+## Setup
+
+1. Create virtual environment:
+   \`\`\`bash
+   python -m venv venv
+   \`\`\`
+
+2. Activate virtual environment:
+   \`\`\`bash
+   # Windows
+   venv\\Scripts\\activate
+   # macOS/Linux
+   source venv/bin/activate
+   \`\`\`
+
+3. Install dependencies:
+   \`\`\`bash
+   pip install -r requirements.txt
+   \`\`\`
+
+4. Run the application:
+   \`\`\`bash
+   python main.py
+   \`\`\`
+`
+        }
+      },
+
+      nextjs: {
+        name: 'Next.js App',
+        setupCommand: 'npx create-next-app@latest',
+        dependencies: ['next', 'react', 'react-dom'],
+        folderStructure: {
+          'app': {
+            'components': {},
+            'api': {},
+            'globals.css': ''
+          },
+          'public': {},
+          'lib': {}
+        },
+        defaultFiles: {
+          'app/page.js': `export default function Home() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
+        <h1 className="text-4xl font-bold text-center">
+          Welcome to {PROJECT_NAME}
+        </h1>
+        <p className="text-center mt-4">
+          Built with Next.js - Start editing to see changes!
+        </p>
+      </div>
+    </main>
+  );
+}`,
+          'app/layout.js': `import './globals.css'
+
+export const metadata = {
+  title: '{PROJECT_NAME}',
+  description: 'A Next.js application',
+}
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}`
+        }
+      }
+    };
+  }
+
+  async createProject(projectType, projectName, targetPath) {
+    try {
+      const template = this.templates[projectType];
+      if (!template) {
+        throw new Error(`Template for ${projectType} not found`);
+      }
+
+      const projectPath = path.join(targetPath, projectName);
+      
+      // Create project directory
+      await fs.mkdir(projectPath, { recursive: true });
+      
+      // Create folder structure
+      await this.createFolderStructure(projectPath, template.folderStructure);
+      
+      // Create default files
+      await this.createDefaultFiles(projectPath, template.defaultFiles, projectName);
+      
+      // Run setup commands
+      await this.runSetupCommands(projectPath, template, projectName);
+      
+      return {
+        success: true,
+        projectPath,
+        message: `${template.name} project "${projectName}" created successfully!`
+      };
+      
+    } catch (error) {
+      console.error('Error creating project:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  async createFolderStructure(basePath, structure) {
+    for (const [name, content] of Object.entries(structure)) {
+      const fullPath = path.join(basePath, name);
+      
+      if (typeof content === 'object' && content !== null) {
+        // It's a directory
+        await fs.mkdir(fullPath, { recursive: true });
+        await this.createFolderStructure(fullPath, content);
+      } else {
+        // It's a file (empty for now)
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+      }
+    }
+  }
+
+  async createDefaultFiles(basePath, files, projectName) {
+    for (const [filePath, content] of Object.entries(files)) {
+      const fullPath = path.join(basePath, filePath);
+      const dir = path.dirname(fullPath);
+      
+      // Create directory if it doesn't exist
+      await fs.mkdir(dir, { recursive: true });
+      
+      // Replace placeholders in content
+      let processedContent = content
+        .replace(/{PROJECT_NAME}/g, projectName)
+        .replace(/{PROJECT_NAME_LOWER}/g, projectName.toLowerCase());
+      
+      // Write file
+      await fs.writeFile(fullPath, processedContent, 'utf8');
+    }
+  }
+
+  async runSetupCommands(projectPath, template, projectName) {
+    try {
+      console.log(`Running setup commands for ${projectName}...`);
+      
+      // Change to project directory and run setup command
+      const command = template.setupCommand;
+      
+      if (command.includes('create-react-app')) {
+        // For React, the command creates the folder, so we run it in parent directory
+        const parentDir = path.dirname(projectPath);
+        await exec(`cd "${parentDir}" && ${command} ${projectName}`, {
+          cwd: parentDir,
+          timeout: 300000 // 5 minutes timeout
+        });
+      } else if (command.includes('create-next-app')) {
+        // For Next.js, similar to React
+        const parentDir = path.dirname(projectPath);
+        await exec(`cd "${parentDir}" && ${command} ${projectName} --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"`, {
+          cwd: parentDir,
+          timeout: 300000
+        });
+      } else if (command.includes('create vue')) {
+        // For Vue.js
+        const parentDir = path.dirname(projectPath);
+        await exec(`cd "${parentDir}" && ${command} ${projectName} --yes`, {
+          cwd: parentDir,
+          timeout: 300000
+        });
+      } else {
+        // For other commands, run in project directory
+        await exec(`cd "${projectPath}" && ${command}`, {
+          cwd: projectPath,
+          timeout: 300000
+        });
+        
+        // Install additional dependencies if specified
+        if (template.dependencies && template.dependencies.length > 0) {
+          const deps = template.dependencies.join(' ');
+          await exec(`cd "${projectPath}" && npm install ${deps}`, {
+            cwd: projectPath,
+            timeout: 300000
+          });
+        }
+        
+        if (template.devDependencies && template.devDependencies.length > 0) {
+          const devDeps = template.devDependencies.join(' ');
+          await exec(`cd "${projectPath}" && npm install --save-dev ${devDeps}`, {
+            cwd: projectPath,
+            timeout: 300000
+          });
+        }
+      }
+      
+      console.log(`Setup completed for ${projectName}`);
+    } catch (error) {
+      console.error('Error running setup commands:', error);
+      throw new Error(`Setup failed: ${error.message}`);
+    }
+  }
+
+  getAvailableTemplates() {
+    return Object.keys(this.templates).map(key => ({
+      value: key,
+      name: this.templates[key].name,
+      description: `Create a new ${this.templates[key].name} project`
+    }));
+  }
+}
+
+module.exports = ProjectTemplateService;
