@@ -1,0 +1,78 @@
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const fs = require('fs').promises;
+const os = require('os');
+
+// Get available drives and common folders
+router.get('/browse', async (req, res) => {
+  try {
+    const { path: requestedPath } = req.query;
+    
+    if (!requestedPath) {
+      // Return common starting points
+      const homeDir = os.homedir();
+      const commonPaths = [
+        { path: homeDir, name: 'Home', type: 'directory' },
+        { path: path.join(homeDir, 'Desktop'), name: 'Desktop', type: 'directory' },
+        { path: path.join(homeDir, 'Documents'), name: 'Documents', type: 'directory' },
+        { path: path.join(homeDir, 'Downloads'), name: 'Downloads', type: 'directory' },
+      ];
+      
+      // Add drives on Windows
+      if (process.platform === 'win32') {
+        const drives = ['C:', 'D:', 'E:', 'F:'];
+        for (const drive of drives) {
+          try {
+            await fs.access(drive + '\\');
+            commonPaths.unshift({ path: drive + '\\', name: drive, type: 'drive' });
+          } catch (error) {
+            // Drive doesn't exist, skip
+          }
+        }
+      }
+      
+      return res.json({
+        success: true,
+        currentPath: '',
+        items: commonPaths
+      });
+    }
+    
+    // Browse the requested path
+    const items = await fs.readdir(requestedPath, { withFileTypes: true });
+    const directories = items
+      .filter(item => item.isDirectory())
+      .map(item => ({
+        path: path.join(requestedPath, item.name),
+        name: item.name,
+        type: 'directory'
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Add parent directory option if not at root
+    const parentDir = path.dirname(requestedPath);
+    if (parentDir !== requestedPath) {
+      directories.unshift({
+        path: parentDir,
+        name: '..',
+        type: 'parent'
+      });
+    }
+    
+    res.json({
+      success: true,
+      currentPath: requestedPath,
+      items: directories
+    });
+    
+  } catch (error) {
+    console.error('Error browsing path:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Unable to access the requested path'
+    });
+  }
+});
+
+module.exports = router;
