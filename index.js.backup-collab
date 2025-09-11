@@ -85,26 +85,6 @@ const io = new Server(server, {
 const activeRooms = new Map(); // roomId -> { participants: Set, code: '', files: [], project: null }
 const userSockets = new Map(); // userId -> socketId
 const terminalSessions = new Map(); // socketId -> { process: childProcess, projectId: string, cwd: string }
-// Enhanced collaboration tracking
-const roomUsers = new Map(); // roomId -> Map(userId -> { name, avatar, color, lastSeen })
-const userCursors = new Map(); // roomId -> Map(userId -> { line, column, selection })
-const activeFiles = new Map(); // roomId -> Map(filePath -> { content, lastModified, editingUsers: Set })
-const userPresence = new Map(); // userId -> { roomId, currentFile, isActive, lastActivity }
-
-// Generate user colors for cursors
-const userColors = [
-  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
-  '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
-];
-let colorIndex = 0;
-
-// Helper function to assign user color
-function assignUserColor() {
-  const color = userColors[colorIndex % userColors.length];
-  colorIndex++;
-  return color;
-}
-
 
 // Helper function to get mock file content for demo purposes
 function getMockFileContent(filePath) {
@@ -698,156 +678,6 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Enhanced collaboration events for real-time coding
-  
-  // Handle user joining with identity
-  socket.on('user-join', ({ roomId, userId, userName, userAvatar }) => {
-    console.log(`Ì±• User ${userName} (${userId}) joining room ${roomId}`);
-    
-    // Initialize room users if not exists
-    if (!roomUsers.has(roomId)) {
-      roomUsers.set(roomId, new Map());
-    }
-    
-    const userColor = assignUserColor();
-    const userData = {
-      id: userId,
-      name: userName || `User${userId.slice(-4)}`,
-      avatar: userAvatar || `https://ui-avatars.com/api/?name=${userName || 'User'}&background=random`,
-      color: userColor,
-      socketId: socket.id,
-      lastSeen: Date.now(),
-      isActive: true
-    };
-    
-    // Store user data
-    roomUsers.get(roomId).set(userId, userData);
-    userPresence.set(userId, { roomId, currentFile: null, isActive: true, lastActivity: Date.now() });
-    
-    // Initialize cursor tracking for this room
-    if (!userCursors.has(roomId)) {
-      userCursors.set(roomId, new Map());
-    }
-    
-    // Notify other users in room about new user
-    socket.to(roomId).emit('user-joined', userData);
-    
-    // Send current room users to the joining user
-    const roomUsersList = Array.from(roomUsers.get(roomId).values());
-    socket.emit('room-users', roomUsersList);
-    
-    console.log(`‚úÖ ${userName} joined room ${roomId} with color ${userColor}`);
-  });
-
-  // Handle cursor position updates
-  socket.on('cursor-position', ({ roomId, userId, filePath, position, selection }) => {
-    if (!userCursors.has(roomId)) {
-      userCursors.set(roomId, new Map());
-    }
-    
-    const cursorData = {
-      userId,
-      filePath,
-      position, // { line, column }
-      selection, // { start: { line, column }, end: { line, column } }
-      timestamp: Date.now()
-    };
-    
-    userCursors.get(roomId).set(userId, cursorData);
-    
-    // Broadcast cursor position to other users
-    socket.to(roomId).emit('cursor-update', cursorData);
-    
-    // Update user presence
-    if (userPresence.has(userId)) {
-      userPresence.get(userId).currentFile = filePath;
-      userPresence.get(userId).lastActivity = Date.now();
-    }
-  });
-
-  // Handle collaborative code changes with operational transform
-  socket.on('code-operation', ({ roomId, userId, filePath, operation, position, content }) => {
-    console.log(`Ì¥Ñ Code operation from ${userId} in ${filePath}: ${operation}`);
-    
-    if (!activeFiles.has(roomId)) {
-      activeFiles.set(roomId, new Map());
-    }
-    
-    // Track file editing
-    if (!activeFiles.get(roomId).has(filePath)) {
-      activeFiles.get(roomId).set(filePath, {
-        content: '',
-        lastModified: Date.now(),
-        editingUsers: new Set()
-      });
-    }
-    
-    const fileData = activeFiles.get(roomId).get(filePath);
-    fileData.editingUsers.add(userId);
-    fileData.lastModified = Date.now();
-    
-    const operationData = {
-      userId,
-      filePath,
-      operation, // 'insert', 'delete', 'replace'
-      position,
-      content,
-      timestamp: Date.now()
-    };
-    
-    // Broadcast operation to other users
-    socket.to(roomId).emit('code-operation', operationData);
-    
-    // Update room code if it's the main file
-    if (activeRooms.has(roomId)) {
-      const room = activeRooms.get(roomId);
-      if (room.currentFile === filePath || !room.currentFile) {
-        room.code = content;
-        room.currentFile = filePath;
-      }
-    }
-  });
-
-  // Handle file selection changes
-  socket.on('file-selected', ({ roomId, userId, filePath }) => {
-    console.log(`Ì≥Ñ ${userId} selected file: ${filePath}`);
-    
-    // Update user presence
-    if (userPresence.has(userId)) {
-      userPresence.get(userId).currentFile = filePath;
-      userPresence.get(userId).lastActivity = Date.now();
-    }
-    
-    // Notify other users about file selection
-    socket.to(roomId).emit('user-file-selected', { userId, filePath });
-  });
-
-  // Handle typing indicators
-  socket.on('typing-start', ({ roomId, userId, filePath }) => {
-    socket.to(roomId).emit('user-typing', { userId, filePath, isTyping: true });
-  });
-
-  socket.on('typing-stop', ({ roomId, userId, filePath }) => {
-    socket.to(roomId).emit('user-typing', { userId, filePath, isTyping: false });
-  });
-
-  // Handle user going away/coming back
-  socket.on('user-away', ({ roomId, userId }) => {
-    if (roomUsers.has(roomId) && roomUsers.get(roomId).has(userId)) {
-      roomUsers.get(roomId).get(userId).isActive = false;
-      socket.to(roomId).emit('user-status-changed', { userId, isActive: false });
-    }
-  });
-
-  socket.on('user-back', ({ roomId, userId }) => {
-    if (roomUsers.has(roomId) && roomUsers.get(roomId).has(userId)) {
-      roomUsers.get(roomId).get(userId).isActive = true;
-      roomUsers.get(roomId).get(userId).lastSeen = Date.now();
-      socket.to(roomId).emit('user-status-changed', { userId, isActive: true });
-    }
-  });
-
-
   // Handle file structure changes (for non-project rooms)
   socket.on('file-structure-change', ({ roomId, files }) => {
     if (activeRooms.has(roomId)) {
@@ -867,7 +697,7 @@ io.on('connection', async (socket) => {
   // Handle user disconnection
   socket.on('disconnect', () => {
     console.log(`‚ùå User disconnected: ${socket.id}`);
-
+    
     // Clean up terminal process
     const session = terminalSessions.get(socket.id);
     if (session && session.process) {
@@ -875,78 +705,24 @@ io.on('connection', async (socket) => {
       terminalSessions.delete(socket.id);
     }
 
-    // Find and clean up user collaboration data
-    let disconnectedUserId = null;
-    let disconnectedRoomId = null;
-    
-    // Find user by socket ID
-    for (const [roomId, users] of roomUsers.entries()) {
-      for (const [userId, userData] of users.entries()) {
-        if (userData.socketId === socket.id) {
-          disconnectedUserId = userId;
-          disconnectedRoomId = roomId;
-          break;
-        }
-      }
-      if (disconnectedUserId) break;
-    }
-
-    // Clean up collaboration data
-    if (disconnectedUserId && disconnectedRoomId) {
-      // Remove from room users
-      if (roomUsers.has(disconnectedRoomId)) {
-        roomUsers.get(disconnectedRoomId).delete(disconnectedUserId);
-        if (roomUsers.get(disconnectedRoomId).size === 0) {
-          roomUsers.delete(disconnectedRoomId);
-        }
-      }
-      
-      // Remove cursor data
-      if (userCursors.has(disconnectedRoomId)) {
-        userCursors.get(disconnectedRoomId).delete(disconnectedUserId);
-        if (userCursors.get(disconnectedRoomId).size === 0) {
-          userCursors.delete(disconnectedRoomId);
-        }
-      }
-      
-      // Clean up file editing tracking
-      if (activeFiles.has(disconnectedRoomId)) {
-        for (const [filePath, fileData] of activeFiles.get(disconnectedRoomId).entries()) {
-          fileData.editingUsers.delete(disconnectedUserId);
-        }
-      }
-      
-      // Remove user presence
-      userPresence.delete(disconnectedUserId);
-      
-      // Notify other users in the room
-      socket.to(disconnectedRoomId).emit('user-left', { userId: disconnectedUserId });
-      
-      console.log(`Ì∑π Cleaned up collaboration data for user ${disconnectedUserId} in room ${disconnectedRoomId}`);
-    }
-
-    // Remove user from all active rooms (existing logic)
+    // Remove user from all active rooms
     for (const [roomId, room] of activeRooms.entries()) {
       if (room.participants.has(socket.id)) {
         room.participants.delete(socket.id);
-
+        
         // Notify other participants
         const participantList = Array.from(room.participants);
         socket.to(roomId).emit('update-user-list', participantList);
-
+        
         // Clean up empty rooms
         if (room.participants.size === 0) {
-          console.log(`Ìø† Cleaning up empty room: ${roomId}`);
           activeRooms.delete(roomId);
-          
-          // Clean up all collaboration data for empty room
-          roomUsers.delete(roomId);
-          userCursors.delete(roomId);
-          activeFiles.delete(roomId);
+          console.log(`üóëÔ∏è  Room ${roomId} cleaned up (no active participants)`);
         }
+        
+        console.log(`üëã User ${socket.id} left room ${roomId}. Remaining participants: ${participantList.length}`);
       }
     }
-  });
   });
 });
 
