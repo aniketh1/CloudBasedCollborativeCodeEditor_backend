@@ -12,7 +12,12 @@
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
   },
-  "keywords": ["collaborative", "code-editor", "terminal", "websocket"],
+  "keywords": [
+    "collaborative",
+    "code-editor",
+    "terminal",
+    "websocket"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
