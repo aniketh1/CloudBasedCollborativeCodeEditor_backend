@@ -772,4 +772,4 @@ Built with love and Flask! Ready for real-time collaboration.`
   }
 }
 
-module.exports = new ProjectTemplateService();
+module.exports = ProjectTemplateService;

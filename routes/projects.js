@@ -8,6 +8,9 @@ const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 const os = require('os');
 
+// Create an instance of ProjectTemplateService
+const templateService = new ProjectTemplateService();
+
 // Get user's projects
 router.get('/', async (req, res) => {
   try {
@@ -32,7 +35,7 @@ router.get('/', async (req, res) => {
 // Get available project templates
 router.get('/templates', async (req, res) => {
   try {
-    const templates = ProjectTemplateService.getAvailableTemplates();
+    const templates = templateService.getAvailableTemplates();
 
     res.json({
       success: true,
@@ -76,7 +79,7 @@ router.post('/', async (req, res) => {
 
     if (projectType && projectType !== 'general') {
       console.log(`Creating ${projectType} template project: ${name}`);
-      templateResult = await ProjectTemplateService.createProject(projectType, name, tempDir);
+      templateResult = await templateService.createProject(projectType, name, tempDir);
       
       if (!templateResult.success) {
         return res.status(400).json({
