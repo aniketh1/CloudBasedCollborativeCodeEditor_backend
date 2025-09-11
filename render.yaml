@@ -12,3 +12,9 @@ services:
         value: 10000
       - key: CORS_ORIGIN
         value: https://cloud-based-collborative-code-editor.vercel.app
+      - key: FRONTEND_URL
+        value: https://cloud-based-collborative-code-editor.vercel.app
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WORKSPACE_DIR
+        value: /tmp/workspace

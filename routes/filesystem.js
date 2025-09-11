@@ -11,7 +11,7 @@ router.get('/browse', async (req, res) => {
 
     if (!requestedPath || requestedPath === '') {
       // Return safe default workspace locations for web environment
-      const workspaceDir = process.env.WORKSPACE_DIR || '/tmp/workspace';
+      const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
       
       // Ensure workspace directory exists
       try {
@@ -45,7 +45,7 @@ router.get('/browse', async (req, res) => {
     }
 
     // Validate path is within workspace for security
-    const workspaceDir = process.env.WORKSPACE_DIR || '/tmp/workspace';
+    const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
     const resolvedPath = path.resolve(requestedPath);
     const resolvedWorkspace = path.resolve(workspaceDir);
     
@@ -121,7 +121,7 @@ router.post('/upload-project', async (req, res) => {
       });
     }
 
-    const workspaceDir = process.env.WORKSPACE_DIR || '/tmp/workspace';
+    const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
     const projectDir = path.join(workspaceDir, 'projects', projectName);
 
     // Create project directory
@@ -161,7 +161,7 @@ router.get('/file/:projectPath', async (req, res) => {
     const { projectPath } = req.params;
     const { filePath } = req.query;
 
-    const workspaceDir = process.env.WORKSPACE_DIR || '/tmp/workspace';
+    const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
     const fullFilePath = path.join(workspaceDir, projectPath, filePath);
 
     // Security check

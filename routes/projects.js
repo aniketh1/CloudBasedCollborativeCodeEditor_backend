@@ -32,8 +32,7 @@ router.get('/', async (req, res) => {
 // Get available project templates
 router.get('/templates', async (req, res) => {
   try {
-    const templateService = new ProjectTemplateService();
-    const templates = templateService.getAvailableTemplates();
+    const templates = ProjectTemplateService.getAvailableTemplates();
 
     res.json({
       success: true,
@@ -74,11 +73,10 @@ router.post('/', async (req, res) => {
 
     // Create project using our template system
     let templateResult = null;
-    const templateService = new ProjectTemplateService();
 
     if (projectType && projectType !== 'general') {
       console.log(`Creating ${projectType} template project: ${name}`);
-      templateResult = await templateService.createProject(projectType, name, tempDir);
+      templateResult = await ProjectTemplateService.createProject(projectType, name, tempDir);
       
       if (!templateResult.success) {
         return res.status(400).json({

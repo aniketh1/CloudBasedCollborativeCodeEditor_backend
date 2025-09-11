@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const { getDB } = require('../config/database');
+const { getDatabase } = require('../config/database');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -25,7 +25,7 @@ class Project {
   // Create a new project
   async save() {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
 
       // Validate local path exists
@@ -79,7 +79,7 @@ class Project {
   // Find project by ID
   static async findById(projectId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
       
       // Convert projectId to ObjectId if valid, otherwise use as string
@@ -95,7 +95,7 @@ class Project {
   // Find project by room ID
   static async findByRoomId(roomId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
       
       const project = await collection.findOne({ roomId: roomId });
@@ -109,7 +109,7 @@ class Project {
   // Get user's projects
   static async getUserProjects(userId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
       
       // Convert userId to ObjectId if it's a valid ObjectId string, otherwise use as string
@@ -133,7 +133,7 @@ class Project {
   // Update project
   static async updateProject(projectId, updateData) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
 
       // Convert projectId to ObjectId if valid, otherwise use as string
@@ -159,7 +159,7 @@ class Project {
   // Delete project
   static async deleteProject(projectId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
 
       // Convert projectId to ObjectId if valid, otherwise use as string
@@ -185,7 +185,7 @@ class Project {
   // Add participant to project
   static async addParticipant(projectId, userId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
 
       // Convert inputs to ObjectId if valid, otherwise use as string
@@ -210,7 +210,7 @@ class Project {
   // Remove participant from project
   static async removeParticipant(projectId, userId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
 
       // Convert inputs to ObjectId if valid, otherwise use as string
@@ -235,7 +235,7 @@ class Project {
   // Get project statistics
   static async getProjectStats() {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const collection = db.collection('projects');
 
       const stats = await collection.aggregate([

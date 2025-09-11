@@ -702,7 +702,7 @@ io.on('connection', async (socket) => {
   
   // Handle user joining with identity
   socket.on('user-join', ({ roomId, userId, userName, userAvatar }) => {
-    console.log(`í±¥ User ${userName} (${userId}) joining room ${roomId}`);
+    console.log(`ï¿½ï¿½ï¿½ User ${userName} (${userId}) joining room ${roomId}`);
     
     // Initialize room users if not exists
     if (!roomUsers.has(roomId)) {
@@ -767,7 +767,7 @@ io.on('connection', async (socket) => {
 
   // Handle collaborative code changes with operational transform
   socket.on('code-operation', ({ roomId, userId, filePath, operation, position, content }) => {
-    console.log(`í´„ Code operation from ${userId} in ${filePath}: ${operation}`);
+    console.log(`ï¿½ï¿½ï¿½ Code operation from ${userId} in ${filePath}: ${operation}`);
     
     if (!activeFiles.has(roomId)) {
       activeFiles.set(roomId, new Map());
@@ -810,7 +810,7 @@ io.on('connection', async (socket) => {
 
   // Handle file selection changes
   socket.on('file-selected', ({ roomId, userId, filePath }) => {
-    console.log(`í³„ ${userId} selected file: ${filePath}`);
+    console.log(`ï¿½ï¿½ï¿½ ${userId} selected file: ${filePath}`);
     
     // Update user presence
     if (userPresence.has(userId)) {
@@ -922,7 +922,7 @@ io.on('connection', async (socket) => {
       // Notify other users in the room
       socket.to(disconnectedRoomId).emit('user-left', { userId: disconnectedUserId });
       
-      console.log(`í·¹ Cleaned up collaboration data for user ${disconnectedUserId} in room ${disconnectedRoomId}`);
+      console.log(`ï¿½ï¿½ï¿½ Cleaned up collaboration data for user ${disconnectedUserId} in room ${disconnectedRoomId}`);
     }
 
     // Remove user from all active rooms (existing logic)
@@ -936,7 +936,7 @@ io.on('connection', async (socket) => {
 
         // Clean up empty rooms
         if (room.participants.size === 0) {
-          console.log(`í¿  Cleaning up empty room: ${roomId}`);
+          console.log(`ï¿½ï¿½ï¿½ Cleaning up empty room: ${roomId}`);
           activeRooms.delete(roomId);
           
           // Clean up all collaboration data for empty room
@@ -954,15 +954,22 @@ const PORT = process.env.PORT || 3001;
 // Initialize database connection and start server
 async function startServer() {
   try {
-    // Connect to database
-    await connectDB();
-    console.log('âœ… Database connected successfully');
+    // Connect to database (won't throw error if fails)
+    const dbConnection = await connectDB();
+    if (dbConnection) {
+      console.log('âœ… Database connected successfully');
+    } else {
+      console.log('âš ï¸ Server starting without database connection');
+    }
     
-    // Start the server
+    // Start the server regardless of database connection
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`ğŸš€ Server running on port ${PORT}`);
       console.log(`ğŸ“ Frontend URL: ${process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://cloud-based-collborative-code-editor.vercel.app'}`);
       console.log(`ğŸ”Œ Socket.IO ready for connections`);
+      if (!dbConnection) {
+        console.log('âš ï¸ Note: Database features may be limited until connection is restored');
+      }
     });
   } catch (error) {
     console.error('âŒ Failed to start server:', error);

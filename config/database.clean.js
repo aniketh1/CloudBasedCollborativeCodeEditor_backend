@@ -16,9 +16,7 @@ let db;
 
 async function connectDB() {
   try {
-    console.log('🔄 Attempting to connect to MongoDB...');
-    
-    // Connect the client to the server with timeout
+    // Connect the client to the server
     await client.connect();
     
     // Get the database instance
@@ -33,12 +31,8 @@ async function connectDB() {
     
     return db;
   } catch (error) {
-    console.error("❌ MongoDB connection error:", error.message);
-    console.log("🔄 Server will continue without database connection");
-    console.log("📝 Project creation features may be limited");
-    
-    // Don't throw error - let server start without database
-    return null;
+    console.error("❌ MongoDB connection error:", error);
+    throw error;
   }
 }
 
@@ -109,10 +103,7 @@ async function createIndexes() {
   }
 }
 
-function getDatabase() {
-  if (!db) {
-    throw new Error('Database not connected. Make sure to call connectDB() first.');
-  }
+async function getDatabase() {
   return db;
 }
 
