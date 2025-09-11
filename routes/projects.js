@@ -6,15 +6,16 @@ const ProjectTemplateService = require('../services/ProjectTemplateService');
 const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
+const os = require('os');
 
 // Get user's projects
 router.get('/', async (req, res) => {
   try {
     // For now, using a mock user ID since auth is not fully implemented
     const userId = req.query.userId || 'mock-user-id';
-    
+
     const projects = await Project.getUserProjects(userId);
-    
+
     res.json({
       success: true,
       projects: projects
@@ -33,7 +34,7 @@ router.get('/templates', async (req, res) => {
   try {
     const templateService = new ProjectTemplateService();
     const templates = templateService.getAvailableTemplates();
-    
+
     res.json({
       success: true,
       templates: templates
@@ -50,73 +51,80 @@ router.get('/templates', async (req, res) => {
 // Create new project
 router.post('/', async (req, res) => {
   try {
-    const { name, description, localPath, projectType } = req.body;
-    
-    if (!name || !localPath) {
-      return res.status(400).json({
-        success: false,
-        error: 'Project name and local path are required'
-      });
-    }
+    const { name, description, projectType } = req.body;
 
-    // Validate that the local path exists
-    try {
-      const stats = await fs.stat(localPath);
-      if (!stats.isDirectory()) {
-        return res.status(400).json({
-          success: false,
-          error: 'Local path must be a directory'
-        });
-      }
-    } catch (error) {
+    if (!name) {
       return res.status(400).json({
         success: false,
-        error: 'Local path does not exist or is not accessible'
+        error: 'Project name is required'
       });
     }
 
     const roomId = uuidv4();
     const userId = req.body.userId || 'mock-user-id'; // Mock user for now
+
+    // Create a temporary project directory for the session
+    const tempDir = path.join(os.tmpdir(), 'codedev-projects', roomId);
+    const projectPath = path.join(tempDir, name);
+
+    console.log(`Creating project directory: ${projectPath}`);
     
-    // If projectType is specified and not 'general', create template project
-    let actualProjectPath = localPath;
+    // Ensure the temp directory exists
+    await fs.mkdir(tempDir, { recursive: true });
+
+    // Create project using our template system
     let templateResult = null;
-    
+    const templateService = new ProjectTemplateService();
+
     if (projectType && projectType !== 'general') {
       console.log(`Creating ${projectType} template project: ${name}`);
-      const templateService = new ProjectTemplateService();
-      templateResult = await templateService.createProject(projectType, name, localPath);
+      templateResult = await templateService.createProject(projectType, name, tempDir);
       
-      if (templateResult.success) {
-        actualProjectPath = templateResult.projectPath;
-        console.log(`Template project created at: ${actualProjectPath}`);
-      } else {
+      if (!templateResult.success) {
         return res.status(400).json({
           success: false,
           error: `Failed to create ${projectType} project: ${templateResult.error}`
         });
       }
+      console.log(`Template project created at: ${templateResult.projectPath}`);
+    } else {
+      // Create a basic project structure for general projects
+      await fs.mkdir(projectPath, { recursive: true });
+      
+      // Create a simple README file
+      const readmeContent = `# ${name}\n\n${description || 'A new CodeDev project'}\n\nStart coding!`;
+      await fs.writeFile(path.join(projectPath, 'README.md'), readmeContent);
+      
+      // Create a basic index file
+      const indexContent = `// Welcome to ${name}\n// Start coding here!\n\nconsole.log("Hello, CodeDev!");`;
+      await fs.writeFile(path.join(projectPath, 'index.js'), indexContent);
+      
+      templateResult = {
+        success: true,
+        projectPath: projectPath,
+        files: ['README.md', 'index.js']
+      };
     }
 
     const project = new Project({
       name,
       description,
-      localPath: path.resolve(actualProjectPath),
+      localPath: templateResult.projectPath,
       createdBy: userId,
       roomId,
       projectType: projectType || 'general'
     });
 
     const result = await project.save();
-    
+
     res.json({
       success: true,
       projectId: result.projectId,
       roomId: roomId,
-      projectPath: actualProjectPath,
+      projectPath: templateResult.projectPath,
       templateCreated: !!templateResult,
-      message: templateResult ? 
-        `${projectType} project "${name}" created successfully with template!` : 
+      message: templateResult ?
+        `${projectType} project "${name}" created successfully with template!` :
         'Project created successfully'
     });
   } catch (error) {
@@ -132,9 +140,9 @@ router.post('/', async (req, res) => {
 router.get('/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params;
-    
+
     const project = await Project.findById(projectId);
-    
+
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -155,79 +163,31 @@ router.get('/:projectId', async (req, res) => {
   }
 });
 
-// Get project by room ID
-router.get('/room/:roomId', async (req, res) => {
-  try {
-    const { roomId } = req.params;
-    
-    const project = await Project.findByRoomId(roomId);
-    
-    if (!project) {
-      return res.status(404).json({
-        success: false,
-        error: 'Project not found for this room'
-      });
-    }
-
-    res.json({
-      success: true,
-      project: project
-    });
-  } catch (error) {
-    console.error('Error fetching project by room:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Update project
-router.put('/:projectId', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const updateData = req.body;
-
-    // Remove fields that shouldn't be updated directly
-    delete updateData._id;
-    delete updateData.createdBy;
-    delete updateData.createdAt;
-
-    const success = await Project.updateProject(projectId, updateData);
-    
-    if (!success) {
-      return res.status(404).json({
-        success: false,
-        error: 'Project not found or update failed'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Project updated successfully'
-    });
-  } catch (error) {
-    console.error('Error updating project:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
 // Delete project
 router.delete('/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params;
-    
-    const success = await Project.deleteProject(projectId);
-    
-    if (!success) {
+    const userId = req.query.userId || req.body.userId || 'mock-user-id';
+
+    const project = await Project.findById(projectId);
+
+    if (!project) {
       return res.status(404).json({
         success: false,
-        error: 'Project not found or deletion failed'
+        error: 'Project not found'
       });
     }
+
+    // Check if user owns the project
+    if (project.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized to delete this project'
+      });
+    }
+
+    // Delete the project record
+    await Project.delete(projectId);
 
     res.json({
       success: true,
@@ -235,263 +195,6 @@ router.delete('/:projectId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error deleting project:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Get project directory structure
-router.get('/:projectId/files', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { path: relativePath = '' } = req.query;
-    
-    const structure = await FileSystemService.getDirectoryStructure(projectId, relativePath);
-    
-    res.json({
-      success: true,
-      files: structure
-    });
-  } catch (error) {
-    console.error('Error getting directory structure:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Read file content - using path param
-router.get('/:projectId/file-content', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { filePath } = req.query;
-    
-    if (!filePath) {
-      return res.status(400).json({
-        success: false,
-        error: 'File path is required'
-      });
-    }
-    
-    const fileData = await FileSystemService.readFile(projectId, filePath);
-    
-    res.json({
-      success: true,
-      file: {
-        path: filePath,
-        ...fileData
-      }
-    });
-  } catch (error) {
-    console.error('Error reading file:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Write file content - using path param
-router.put('/:projectId/file-content', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { filePath, content } = req.body;
-    
-    if (content === undefined) {
-      return res.status(400).json({
-        success: false,
-        error: 'File content is required'
-      });
-    }
-
-    const result = await FileSystemService.writeFile(projectId, filePath, content);
-    
-    res.json({
-      success: true,
-      file: {
-        path: filePath,
-        ...result
-      }
-    });
-  } catch (error) {
-    console.error('Error writing file:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Create new file
-router.post('/:projectId/files', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { path: filePath, content = '' } = req.body;
-    
-    if (!filePath) {
-      return res.status(400).json({
-        success: false,
-        error: 'File path is required'
-      });
-    }
-
-    const result = await FileSystemService.createFile(projectId, filePath, content);
-    
-    res.json({
-      success: true,
-      file: result
-    });
-  } catch (error) {
-    console.error('Error creating file:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Create new directory
-router.post('/:projectId/directories', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { path: dirPath } = req.body;
-    
-    if (!dirPath) {
-      return res.status(400).json({
-        success: false,
-        error: 'Directory path is required'
-      });
-    }
-
-    const result = await FileSystemService.createDirectory(projectId, dirPath);
-    
-    res.json({
-      success: true,
-      directory: result
-    });
-  } catch (error) {
-    console.error('Error creating directory:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Delete file or directory - using query param
-router.delete('/:projectId/file-item', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { itemPath } = req.query;
-    
-    if (!itemPath) {
-      return res.status(400).json({
-        success: false,
-        error: 'Item path is required'
-      });
-    }
-    
-    const result = await FileSystemService.deleteItem(projectId, itemPath);
-    
-    res.json({
-      success: true,
-      message: 'Item deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting item:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Execute terminal command
-router.post('/:projectId/terminal', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { command, workingDirectory = '' } = req.body;
-    
-    if (!command) {
-      return res.status(400).json({
-        success: false,
-        error: 'Command is required'
-      });
-    }
-
-    const result = await FileSystemService.executeCommand(projectId, command, workingDirectory);
-    
-    res.json({
-      success: true,
-      result: result
-    });
-  } catch (error) {
-    console.error('Error executing command:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Add participant to project
-router.post('/:projectId/participants', async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { userId } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'User ID is required'
-      });
-    }
-
-    const success = await Project.addParticipant(projectId, userId);
-    
-    if (!success) {
-      return res.status(404).json({
-        success: false,
-        error: 'Project not found or participant already exists'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Participant added successfully'
-    });
-  } catch (error) {
-    console.error('Error adding participant:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Remove participant from project
-router.delete('/:projectId/participants/:userId', async (req, res) => {
-  try {
-    const { projectId, userId } = req.params;
-    
-    const success = await Project.removeParticipant(projectId, userId);
-    
-    if (!success) {
-      return res.status(404).json({
-        success: false,
-        error: 'Project or participant not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Participant removed successfully'
-    });
-  } catch (error) {
-    console.error('Error removing participant:', error);
     res.status(500).json({
       success: false,
       error: error.message
