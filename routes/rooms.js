@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Room = require('../models/Room');
+const RoomMember = require('../models/RoomMember');
+const Project = require('../models/Project');
 const { authenticateToken } = require('../middleware/auth');
 
 // Create a new room
@@ -263,6 +265,107 @@ router.delete('/:roomId', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Internal server error'
+    });
+  }
+});
+
+// Middleware to validate user authentication (Clerk userId from headers)
+const authenticateClerkUser = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required'
+    });
+  }
+  
+  const userId = authHeader.substring(7); // Remove 'Bearer ' prefix
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid authentication token'
+    });
+  }
+  
+  req.userId = userId;
+  next();
+};
+
+// GET /api/rooms/:roomId/access - Check if user has access to a specific room
+router.get('/:roomId/access', authenticateClerkUser, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { userId } = req;
+
+    // Check if user is a member of the room
+    const accessInfo = await RoomMember.hasAccess(roomId, userId);
+
+    if (!accessInfo.hasAccess) {
+      return res.json({
+        hasAccess: false,
+        message: 'You do not have access to this room'
+      });
+    }
+
+    // Get additional room information
+    const project = await Project.findByRoomId(roomId);
+    
+    res.json({
+      hasAccess: true,
+      role: accessInfo.role,
+      message: `Access granted as ${accessInfo.role}`,
+      room: {
+        id: roomId,
+        project: project ? {
+          id: project.projectId,
+          name: project.name,
+          description: project.description
+        } : null
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking room access:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check room access'
+    });
+  }
+});
+
+// GET /api/rooms/:roomId/members - Get all members of a room
+router.get('/:roomId/members', authenticateClerkUser, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { userId } = req;
+
+    // Check if user has access to the room
+    const accessInfo = await RoomMember.hasAccess(roomId, userId);
+    if (!accessInfo.hasAccess) {
+      return res.status(403).json({
+        success: false,
+        error: 'You do not have access to this room'
+      });
+    }
+
+    // Get all room members
+    const members = await RoomMember.findByRoom(roomId);
+
+    res.json({
+      success: true,
+      members: members.map(member => ({
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        invitedBy: member.invitedBy
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error getting room members:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get room members'
     });
   }
 });

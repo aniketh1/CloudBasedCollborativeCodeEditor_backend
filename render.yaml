@@ -5,11 +5,12 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        generateValue: true
       - key: CORS_ORIGIN
         value: https://cloud-based-collborative-code-editor.vercel.app
       - key: FRONTEND_URL
@@ -18,3 +19,5 @@ services:
         generateValue: true
       - key: WORKSPACE_DIR
         value: /tmp/workspace
+    # Auto-deploy from main branch
+    autoDeploy: true

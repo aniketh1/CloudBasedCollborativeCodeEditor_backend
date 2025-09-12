@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:email": "node test-email.js",
+    "postinstall": "echo \"Installation complete. Configure your .env file before starting.\""
   },
   "engines": {
     "node": ">=18.0.0",
@@ -28,6 +30,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.19.0",
+    "nodemailer": "^6.9.7",
     "mongoose": "^8.18.1",
     "socket.io": "^4.8.1",
     "uuid": "^9.0.1"

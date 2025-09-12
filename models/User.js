@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const { getDB } = require('../config/database');
+const { getDatabase } = require('../config/database');
 const bcrypt = require('bcrypt');
 
 class User {
@@ -19,7 +19,7 @@ class User {
   // Create a new user
   async save() {
     try {
-      const db = getDB();
+      const db = getDatabase();
       
       // Hash password before saving
       if (this.password) {
@@ -40,7 +40,7 @@ class User {
   // Find user by email
   static async findByEmail(email) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const user = await db.collection('users').findOne({ email });
       return user;
     } catch (error) {
@@ -51,7 +51,7 @@ class User {
   // Find user by username
   static async findByUsername(username) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const user = await db.collection('users').findOne({ username });
       return user;
     } catch (error) {
@@ -62,7 +62,7 @@ class User {
   // Find user by ID
   static async findById(userId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
       return user;
     } catch (error) {
@@ -82,7 +82,7 @@ class User {
   // Update user
   static async updateById(userId, updateData) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       updateData.updatedAt = new Date();
       
       // Hash password if it's being updated
@@ -104,7 +104,7 @@ class User {
   // Update last login
   static async updateLastLogin(userId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       await db.collection('users').updateOne(
         { _id: new ObjectId(userId) },
         { 
@@ -122,7 +122,7 @@ class User {
   // Get all users (for admin purposes)
   static async findAll(page = 1, limit = 10) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const skip = (page - 1) * limit;
       
       const users = await db.collection('users')
@@ -155,7 +155,7 @@ class User {
   // Delete user
   static async deleteById(userId) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const result = await db.collection('users').deleteOne({ _id: new ObjectId(userId) });
       return { success: result.deletedCount > 0 };
     } catch (error) {
@@ -166,7 +166,7 @@ class User {
   // Search users by username or email
   static async search(searchTerm, page = 1, limit = 10) {
     try {
-      const db = getDB();
+      const db = getDatabase();
       const skip = (page - 1) * limit;
       
       const searchRegex = new RegExp(searchTerm, 'i');
@@ -203,6 +203,114 @@ class User {
       };
     } catch (error) {
       throw new Error(`Error searching users: ${error.message}`);
+    }
+  }
+
+  // Search users alphabetically by name or email for collaboration
+  static async searchUsersAlphabetically(query, excludeUserId = null, limit = 20) {
+    try {
+      const db = getDatabase();
+      
+      // Create case-insensitive search regex
+      const searchRegex = new RegExp(query, 'i');
+      
+      // Build query
+      const searchQuery = {
+        $and: [
+          {
+            $or: [
+              { firstName: { $regex: searchRegex } },
+              { lastName: { $regex: searchRegex } },
+              { username: { $regex: searchRegex } },
+              { email: { $regex: searchRegex } }
+            ]
+          }
+        ]
+      };
+
+      // Exclude current user if specified
+      if (excludeUserId) {
+        searchQuery.$and.push({ _id: { $ne: new ObjectId(excludeUserId) } });
+      }
+
+      const users = await db.collection('users')
+        .find(searchQuery, { 
+          projection: { 
+            _id: 1,
+            firstName: 1,
+            lastName: 1, 
+            username: 1,
+            email: 1, 
+            profilePicture: 1,
+            password: 0 
+          }
+        })
+        .sort({ firstName: 1, lastName: 1 }) // Sort alphabetically by name
+        .limit(limit)
+        .toArray();
+      
+      // Transform to match expected format
+      return users.map(user => ({
+        id: user._id.toString(),
+        name: `${user.firstName} ${user.lastName}`.trim() || user.username,
+        email: user.email,
+        avatar: user.profilePicture
+      }));
+    } catch (error) {
+      console.error('Error searching users alphabetically:', error);
+      return [];
+    }
+  }
+
+  // Find user by ID (for Clerk integration)
+  static async findById(id) {
+    try {
+      const db = getDatabase();
+      const user = await db.collection('users').findOne({ 
+        $or: [
+          { _id: new ObjectId(id) },
+          { clerkId: id } // Support Clerk user IDs
+        ]
+      });
+      return user;
+    } catch (error) {
+      console.error('Error finding user by ID:', error);
+      return null;
+    }
+  }
+
+  // Update or create user from Clerk data
+  static async upsertFromClerk(clerkUser) {
+    try {
+      const db = getDatabase();
+      
+      const userData = {
+        clerkId: clerkUser.id,
+        email: clerkUser.emailAddresses[0]?.emailAddress,
+        firstName: clerkUser.firstName || '',
+        lastName: clerkUser.lastName || '',
+        username: clerkUser.username || `${clerkUser.firstName}${clerkUser.lastName}`.toLowerCase(),
+        profilePicture: clerkUser.profileImageUrl || '',
+        lastLogin: new Date(),
+        updatedAt: new Date()
+      };
+
+      const result = await db.collection('users').updateOne(
+        { $or: [{ clerkId: clerkUser.id }, { email: userData.email }] },
+        { 
+          $set: userData,
+          $setOnInsert: { createdAt: new Date() }
+        },
+        { upsert: true }
+      );
+
+      return {
+        success: true,
+        userId: result.upsertedId || result.matchedCount > 0 ? 'updated' : 'created'
+      };
+    } catch (error) {
+      console.error('Error upserting user from Clerk:', error);
+      return { success: false, error: error.message };
     }
   }
 }

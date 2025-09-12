@@ -17,15 +17,18 @@ const { connectDB } = require('./config/database');
 // const Session = require('./models/Session');
 // const Room = require('./models/Room');
 const Project = require('./models/Project');
+const RoomMember = require('./models/RoomMember');
 
 // Services
 const FileSystemService = require('./services/FileSystemService');
 
 // Routes (commented out temporarily)
 // const authRoutes = require('./routes/auth');
-// const roomRoutes = require('./routes/rooms');
+const roomRoutes = require('./routes/rooms');
 const projectRoutes = require('./routes/projects');
 const filesystemRoutes = require('./routes/filesystem');
+const userRoutes = require('./routes/users');
+const inviteRoutes = require('./routes/invites');
 
 // Middleware (commented out temporarily)
 // const { authenticateSocket, createRateLimit } = require('./middleware/auth');
@@ -36,10 +39,19 @@ const app = express();
 // app.use(clerkMiddleware());
 
 // Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://cloud-based-collborative-code-editor.vercel.app',
-  credentials: true
-}));
+const corsOptions = {
+  origin: [
+    process.env.CORS_ORIGIN || "http://localhost:3000",
+    process.env.FRONTEND_URL || "https://cloud-based-collborative-code-editor.vercel.app",
+    "https://cloud-based-collborative-code-editor.vercel.app",
+    "http://localhost:3000", // For development
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -49,9 +61,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes (commented out temporarily)
 // app.use('/api/auth', authRoutes);
-// app.use('/api/rooms', roomRoutes);
+app.use('/api/rooms', roomRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/filesystem', filesystemRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/invites', inviteRoutes);
 
 // Health check endpoint (simplified)
 app.get('/api/health', async (req, res) => {
@@ -71,14 +85,34 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Simple health check for Render monitoring
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'https://cloud-based-collborative-code-editor.vercel.app',
+    origin: [
+      process.env.CORS_ORIGIN || "http://localhost:3000",
+      process.env.FRONTEND_URL || "https://cloud-based-collborative-code-editor.vercel.app",
+      "https://cloud-based-collborative-code-editor.vercel.app",
+      "http://localhost:3000"
+    ],
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  // Add these for better production performance
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  maxHttpBufferSize: 1e6, // 1MB
+  allowEIO3: true
 });
 
 // Store active room sessions (simplified structure)
@@ -321,13 +355,33 @@ function getFileLanguage(filePath) {
 io.on('connection', async (socket) => {
   console.log(`🔌 User connected: ${socket.id}`);
   
-  // V2: Enhanced join-room handler with better debugging
-  socket.on('join-room', async (roomId) => {
+  // V2: Enhanced join-room handler with access validation
+  socket.on('join-room', async (data) => {
     try {
-      console.log(`📝 V2: User ${socket.id} joining room ${roomId}`);
+      const { roomId, userId, userName } = data;
+      console.log(`📝 V2: User ${socket.id} (${userName}) joining room ${roomId}`);
+      
+      // Validate room access if userId provided
+      if (userId) {
+        const accessInfo = await RoomMember.hasAccess(roomId, userId);
+        if (!accessInfo.hasAccess) {
+          console.log(`❌ V2: Access denied for user ${userId} to room ${roomId}`);
+          socket.emit('room-error', { 
+            error: 'Access denied. You do not have permission to join this room.',
+            code: 'ACCESS_DENIED'
+          });
+          return;
+        }
+        console.log(`✅ V2: Access granted for user ${userId} as ${accessInfo.role}`);
+      }
       
       // Join socket to room
       socket.join(roomId);
+      
+      // Store user info for this socket
+      socket.userId = userId;
+      socket.userName = userName;
+      socket.roomId = roomId;
       
       // Try to find associated project
       let project = null;
@@ -410,6 +464,20 @@ io.on('connection', async (socket) => {
       const room = activeRooms.get(roomId);
       room.participants.add(socket.id);
       
+      // Update room users map for enhanced collaboration
+      if (!roomUsers.has(roomId)) {
+        roomUsers.set(roomId, new Map());
+      }
+      
+      if (userId && userName) {
+        roomUsers.get(roomId).set(userId, {
+          name: userName,
+          socketId: socket.id,
+          lastSeen: new Date(),
+          color: userColors[roomUsers.get(roomId).size % userColors.length]
+        });
+      }
+      
       // Send ONLY the project-loaded event (no duplicates)
       console.log(`📤 V2: Sending project data to ${socket.id}:`);
       console.log(`  - Project: ${room.project ? room.project.name : 'none'}`);
@@ -421,9 +489,19 @@ io.on('connection', async (socket) => {
         files: room.files
       });
       
-      // Notify all participants about updated user list
+      // Notify all participants about updated user list with enhanced data
       const participantList = Array.from(room.participants);
+      const roomUsersList = roomUsers.has(roomId) ? 
+        Array.from(roomUsers.get(roomId).values()) : [];
+      
+      io.to(roomId).emit('room-users', {
+        participants: participantList,
+        users: roomUsersList,
+        totalUsers: roomUsersList.length
+      });
       io.to(roomId).emit('update-user-list', participantList);
+      
+            io.to(roomId).emit('update-user-list', participantList);
       
       console.log(`✅ V2: User ${socket.id} joined room ${roomId}. Active participants: ${participantList.length}`);
     } catch (error) {
@@ -788,6 +866,7 @@ io.on('connection', async (socket) => {
     
     const operationData = {
       userId,
+      userName,
       filePath,
       operation, // 'insert', 'delete', 'replace'
       position,
@@ -822,13 +901,25 @@ io.on('connection', async (socket) => {
     socket.to(roomId).emit('user-file-selected', { userId, filePath });
   });
 
-  // Handle typing indicators
-  socket.on('typing-start', ({ roomId, userId, filePath }) => {
-    socket.to(roomId).emit('user-typing', { userId, filePath, isTyping: true });
+  // Enhanced typing indicators with user information
+  socket.on('typing-start', ({ roomId, userId, userName, filePath }) => {
+    socket.to(roomId).emit('user-typing', { 
+      userId, 
+      userName, 
+      filePath, 
+      type: 'typing-start',
+      timestamp: Date.now()
+    });
   });
 
-  socket.on('typing-stop', ({ roomId, userId, filePath }) => {
-    socket.to(roomId).emit('user-typing', { userId, filePath, isTyping: false });
+  socket.on('typing-stop', ({ roomId, userId, userName, filePath }) => {
+    socket.to(roomId).emit('user-typing', { 
+      userId, 
+      userName, 
+      filePath, 
+      type: 'typing-stop',
+      timestamp: Date.now()
+    });
   });
 
   // Handle user going away/coming back
@@ -857,6 +948,56 @@ io.on('connection', async (socket) => {
         socket.to(roomId).emit('file-structure-update', files);
       }
     }
+  });
+
+  // Handle real-time file updates with content persistence
+  socket.on('file-updated', (data) => {
+    const { roomId, filePath, content, userId, userName } = data;
+    
+    console.log(`📝 File updated: ${filePath} by ${userName}`);
+    
+    // Store latest file content in active files map
+    if (!activeFiles.has(roomId)) {
+      activeFiles.set(roomId, new Map());
+    }
+    
+    activeFiles.get(roomId).set(filePath, {
+      content,
+      lastModified: Date.now(),
+      editingUsers: new Set([userId])
+    });
+    
+    // Broadcast to all other users in the room
+    socket.to(roomId).emit('file-updated', {
+      filePath,
+      content,
+      userId,
+      userName,
+      timestamp: Date.now()
+    });
+  });
+
+  // Handle project structure updates (files/folders added/deleted)
+  socket.on('project-structure-updated', (data) => {
+    const { roomId, fileTree, deletedFiles, userId, userName, operation } = data;
+    
+    console.log(`🏗️ Project structure updated by ${userName}: ${operation}`);
+    
+    // Update room file structure
+    if (activeRooms.has(roomId)) {
+      const room = activeRooms.get(roomId);
+      room.files = fileTree;
+    }
+    
+    // Broadcast to all other users in the room
+    socket.to(roomId).emit('project-structure-updated', {
+      fileTree,
+      deletedFiles: deletedFiles || [],
+      userId,
+      userName,
+      operation, // 'create', 'delete', 'rename', 'move'
+      timestamp: Date.now()
+    });
   });
 
   // Handle resize event (simplified - no actual resize for child_process)
