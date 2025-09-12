@@ -358,8 +358,24 @@ io.on('connection', async (socket) => {
   // V2: Enhanced join-room handler with access validation
   socket.on('join-room', async (data) => {
     try {
-      const { roomId, userId, userName } = data;
-      console.log(`📝 V2: User ${socket.id} (${userName}) joining room ${roomId}`);
+      // Handle both string roomId and object formats
+      let roomId, userId, userName;
+      
+      if (typeof data === 'string') {
+        // Frontend sends just roomId as string
+        roomId = data;
+        userId = null;
+        userName = null;
+        console.log(`📝 V2: User ${socket.id} joining room ${roomId} (string format)`);
+      } else if (typeof data === 'object' && data.roomId) {
+        // Object format with roomId, userId, userName
+        ({ roomId, userId, userName } = data);
+        console.log(`📝 V2: User ${socket.id} (${userName}) joining room ${roomId} (object format)`);
+      } else {
+        console.error(`❌ V2: Invalid join-room data format:`, data);
+        socket.emit('room-error', { error: 'Invalid room data format' });
+        return;
+      }
       
       // Validate room access if userId provided
       if (userId) {
@@ -697,7 +713,16 @@ io.on('connection', async (socket) => {
       const { roomId, folderPath } = data;
       console.log('📁 V2: Read folder request:', { roomId, folderPath });
       
+      // CRITICAL: Wait for room to be established (fixes race condition)
+      let attempts = 0;
+      while (attempts < 5 && !activeRooms.has(roomId)) {
+        console.log(`⏳ V2: Waiting for room ${roomId} to be initialized (attempt ${attempts + 1})`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        attempts++;
+      }
+      
       if (!activeRooms.has(roomId)) {
+        console.error(`❌ V2: Room ${roomId} not found after waiting`);
         socket.emit('folder-error', { error: 'Room not found' });
         return;
       }
@@ -718,6 +743,7 @@ io.on('connection', async (socket) => {
         }
       } else {
         // For demo/non-project rooms, return empty
+        console.log('📁 V2: Returning empty folder for demo room');
         socket.emit('folder-content', {
           path: folderPath,
           children: []
