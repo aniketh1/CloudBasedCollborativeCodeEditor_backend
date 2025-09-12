@@ -1120,6 +1120,268 @@ io.on('connection', async (socket) => {
     });
   });
 
+  // ================== ENHANCED COLLABORATIVE FEATURES ==================
+  
+  // Real-time content synchronization (without saving)
+  socket.on('realtime-content-sync', ({ roomId, userId, filePath, content, selection, cursor }) => {
+    console.log(`🔄 Real-time content sync from ${userId} in ${filePath}`);
+    
+    // Wait for room to be established
+    let attempts = 0;
+    const waitForRoom = async () => {
+      while (attempts < 5 && !activeRooms.has(roomId)) {
+        console.log(`⏳ Waiting for room ${roomId} for real-time sync (attempt ${attempts + 1})`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+      
+      if (!activeRooms.has(roomId)) {
+        console.error(`❌ Room ${roomId} not found for real-time sync`);
+        return;
+      }
+      
+      // Track real-time content
+      if (!activeFiles.has(roomId)) {
+        activeFiles.set(roomId, new Map());
+      }
+      
+      if (!activeFiles.get(roomId).has(filePath)) {
+        activeFiles.get(roomId).set(filePath, {
+          content: '',
+          lastModified: Date.now(),
+          editingUsers: new Set()
+        });
+      }
+      
+      const fileData = activeFiles.get(roomId).get(filePath);
+      fileData.content = content;
+      fileData.editingUsers.add(userId);
+      fileData.lastModified = Date.now();
+      
+      // Get user name
+      const roomUser = roomUsers.has(roomId) && roomUsers.get(roomId).has(userId) 
+        ? roomUsers.get(roomId).get(userId) 
+        : null;
+      const userName = roomUser?.name || 
+                      (userPresence.has(userId) ? userPresence.get(userId).name : userId);
+      
+      // Broadcast real-time content to other users
+      socket.to(roomId).emit('realtime-content-sync', {
+        userId,
+        userName,
+        filePath,
+        content,
+        selection,
+        cursor,
+        timestamp: Date.now()
+      });
+    };
+    
+    waitForRoom();
+  });
+
+  // Enhanced typing indicators with line information
+  socket.on('enhanced-typing-start', ({ roomId, userId, userName, filePath, lineNumber, position }) => {
+    console.log(`⌨️ ${userName} started typing at line ${lineNumber} in ${filePath}`);
+    
+    socket.to(roomId).emit('user-enhanced-typing', { 
+      userId, 
+      userName, 
+      filePath, 
+      lineNumber,
+      position,
+      type: 'typing-start',
+      timestamp: Date.now()
+    });
+  });
+
+  socket.on('enhanced-typing-stop', ({ roomId, userId, userName, filePath }) => {
+    console.log(`⌨️ ${userName} stopped typing in ${filePath}`);
+    
+    socket.to(roomId).emit('user-enhanced-typing', { 
+      userId, 
+      userName, 
+      filePath, 
+      type: 'typing-stop',
+      timestamp: Date.now()
+    });
+  });
+
+  // File operation handlers for CRUD operations
+  socket.on('create-file', async ({ roomId, filePath, initialContent = '' }) => {
+    console.log(`📄 Creating file: ${filePath} in room ${roomId}`);
+    
+    // Wait for room to be established
+    let attempts = 0;
+    while (attempts < 5 && !activeRooms.has(roomId)) {
+      console.log(`⏳ Waiting for room ${roomId} for file creation (attempt ${attempts + 1})`);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      attempts++;
+    }
+    
+    if (!activeRooms.has(roomId)) {
+      console.error(`❌ Room ${roomId} not found for file creation`);
+      socket.emit('file-operation-error', { error: 'Room not found' });
+      return;
+    }
+
+    try {
+      const room = activeRooms.get(roomId);
+      
+      if (!room.project) {
+        // Demo mode - just update files array
+        socket.emit('file-created', { filePath, success: true });
+        socket.to(roomId).emit('file-created', { filePath, success: true });
+      } else {
+        // Real project - use FileSystemService
+        await FileSystemService.writeFile(room.project._id.toString(), filePath, initialContent);
+        console.log(`✅ File created: ${filePath}`);
+        
+        // Update file tree
+        const updatedFiles = await FileSystemService.getDirectoryStructureRecursive(room.project._id.toString());
+        room.files = updatedFiles;
+        
+        // Broadcast file creation
+        socket.emit('file-created', { filePath, success: true });
+        socket.to(roomId).emit('file-structure-update', updatedFiles);
+      }
+    } catch (error) {
+      console.error(`❌ File creation error for ${filePath}:`, error);
+      socket.emit('file-operation-error', { error: error.message, operation: 'create-file' });
+    }
+  });
+
+  socket.on('create-folder', async ({ roomId, folderPath }) => {
+    console.log(`📁 Creating folder: ${folderPath} in room ${roomId}`);
+    
+    // Wait for room to be established
+    let attempts = 0;
+    while (attempts < 5 && !activeRooms.has(roomId)) {
+      console.log(`⏳ Waiting for room ${roomId} for folder creation (attempt ${attempts + 1})`);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      attempts++;
+    }
+    
+    if (!activeRooms.has(roomId)) {
+      console.error(`❌ Room ${roomId} not found for folder creation`);
+      socket.emit('file-operation-error', { error: 'Room not found' });
+      return;
+    }
+
+    try {
+      const room = activeRooms.get(roomId);
+      
+      if (!room.project) {
+        // Demo mode - just update files array
+        socket.emit('folder-created', { folderPath, success: true });
+        socket.to(roomId).emit('folder-created', { folderPath, success: true });
+      } else {
+        // Real project - use FileSystemService
+        await FileSystemService.createDirectory(room.project._id.toString(), folderPath);
+        console.log(`✅ Folder created: ${folderPath}`);
+        
+        // Update file tree
+        const updatedFiles = await FileSystemService.getDirectoryStructureRecursive(room.project._id.toString());
+        room.files = updatedFiles;
+        
+        // Broadcast folder creation
+        socket.emit('folder-created', { folderPath, success: true });
+        socket.to(roomId).emit('file-structure-update', updatedFiles);
+      }
+    } catch (error) {
+      console.error(`❌ Folder creation error for ${folderPath}:`, error);
+      socket.emit('file-operation-error', { error: error.message, operation: 'create-folder' });
+    }
+  });
+
+  socket.on('delete-file', async ({ roomId, filePath }) => {
+    console.log(`🗑️ Deleting file: ${filePath} in room ${roomId}`);
+    
+    // Wait for room to be established
+    let attempts = 0;
+    while (attempts < 5 && !activeRooms.has(roomId)) {
+      console.log(`⏳ Waiting for room ${roomId} for file deletion (attempt ${attempts + 1})`);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      attempts++;
+    }
+    
+    if (!activeRooms.has(roomId)) {
+      console.error(`❌ Room ${roomId} not found for file deletion`);
+      socket.emit('file-operation-error', { error: 'Room not found' });
+      return;
+    }
+
+    try {
+      const room = activeRooms.get(roomId);
+      
+      if (!room.project) {
+        // Demo mode - just update files array
+        socket.emit('file-deleted', { filePath, success: true });
+        socket.to(roomId).emit('file-deleted', { filePath, success: true });
+      } else {
+        // Real project - use FileSystemService
+        await FileSystemService.deleteFile(room.project._id.toString(), filePath);
+        console.log(`✅ File deleted: ${filePath}`);
+        
+        // Update file tree
+        const updatedFiles = await FileSystemService.getDirectoryStructureRecursive(room.project._id.toString());
+        room.files = updatedFiles;
+        
+        // Broadcast file deletion
+        socket.emit('file-deleted', { filePath, success: true });
+        socket.to(roomId).emit('file-structure-update', updatedFiles);
+      }
+    } catch (error) {
+      console.error(`❌ File deletion error for ${filePath}:`, error);
+      socket.emit('file-operation-error', { error: error.message, operation: 'delete-file' });
+    }
+  });
+
+  socket.on('delete-folder', async ({ roomId, folderPath }) => {
+    console.log(`🗑️ Deleting folder: ${folderPath} in room ${roomId}`);
+    
+    // Wait for room to be established
+    let attempts = 0;
+    while (attempts < 5 && !activeRooms.has(roomId)) {
+      console.log(`⏳ Waiting for room ${roomId} for folder deletion (attempt ${attempts + 1})`);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      attempts++;
+    }
+    
+    if (!activeRooms.has(roomId)) {
+      console.error(`❌ Room ${roomId} not found for folder deletion`);
+      socket.emit('file-operation-error', { error: 'Room not found' });
+      return;
+    }
+
+    try {
+      const room = activeRooms.get(roomId);
+      
+      if (!room.project) {
+        // Demo mode - just update files array
+        socket.emit('folder-deleted', { folderPath, success: true });
+        socket.to(roomId).emit('folder-deleted', { folderPath, success: true });
+      } else {
+        // Real project - use FileSystemService
+        await FileSystemService.deleteDirectory(room.project._id.toString(), folderPath);
+        console.log(`✅ Folder deleted: ${folderPath}`);
+        
+        // Update file tree
+        const updatedFiles = await FileSystemService.getDirectoryStructureRecursive(room.project._id.toString());
+        room.files = updatedFiles;
+        
+        // Broadcast folder deletion
+        socket.emit('folder-deleted', { folderPath, success: true });
+        socket.to(roomId).emit('file-structure-update', updatedFiles);
+      }
+    } catch (error) {
+      console.error(`❌ Folder deletion error for ${folderPath}:`, error);
+      socket.emit('file-operation-error', { error: error.message, operation: 'delete-folder' });
+    }
+  });
+
+  // ================== END ENHANCED FEATURES ==================
+
   // Handle resize event (simplified - no actual resize for child_process)
   socket.on('resize', ({ cols, rows }) => {
     console.log(`Terminal resize requested: ${cols}x${rows}`);
