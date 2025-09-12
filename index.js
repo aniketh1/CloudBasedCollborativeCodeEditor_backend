@@ -579,7 +579,12 @@ io.on('connection', async (socket) => {
         socket.emit('terminal-output', `Error: ${error.message}\r\n`);
       });
 
-      socket.emit('terminal-ready');
+      socket.emit('terminal-ready', { 
+        status: 'connected',
+        message: 'Terminal is ready for commands',
+        workingDirectory: workingDirectory,
+        projectPath: room && room.project ? room.project.name : 'No project'
+      });
       socket.emit('terminal-output', `Terminal ready! Working directory: ${workingDirectory}\r\n`);
       if (room && room.project) {
         socket.emit('terminal-output', `Project: ${room.project.name}\r\n`);
@@ -638,8 +643,18 @@ io.on('connection', async (socket) => {
   socket.on('read-file', async (data) => {
     try {
       const { roomId, filePath } = data;
+      console.log(`📄 Read file request: ${filePath} in room ${roomId}`);
+      
+      // CRITICAL: Wait for room to be established (fixes race condition)
+      let attempts = 0;
+      while (attempts < 5 && !activeRooms.has(roomId)) {
+        console.log(`⏳ Waiting for room ${roomId} to be initialized (attempt ${attempts + 1})`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        attempts++;
+      }
       
       if (!activeRooms.has(roomId)) {
+        console.error(`❌ Room ${roomId} not found after waiting`);
         socket.emit('file-error', { error: 'Room not found' });
         return;
       }
@@ -649,6 +664,7 @@ io.on('connection', async (socket) => {
       if (room.project) {
         // Try to read actual project file
         try {
+          console.log(`📝 Reading project file: ${filePath}`);
           const fileData = await FileSystemService.readFile(room.project._id.toString(), filePath);
           socket.emit('file-content', {
             path: filePath,
@@ -661,6 +677,7 @@ io.on('connection', async (socket) => {
         }
       } else {
         // For demo/non-project rooms, return mock content
+        console.log(`📝 Returning mock content for: ${filePath}`);
         const mockContent = getMockFileContent(filePath);
         socket.emit('file-content', {
           path: filePath,
@@ -715,19 +732,33 @@ io.on('connection', async (socket) => {
   socket.on('write-file', async (data) => {
     try {
       const { roomId, filePath, content } = data;
+      console.log(`💾 Write file request: ${filePath} in room ${roomId}`);
+      
+      // CRITICAL: Wait for room to be established (fixes race condition)
+      let attempts = 0;
+      while (attempts < 5 && !activeRooms.has(roomId)) {
+        console.log(`⏳ Waiting for room ${roomId} to be initialized (attempt ${attempts + 1})`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        attempts++;
+      }
       
       if (!activeRooms.has(roomId)) {
+        console.error(`❌ Room ${roomId} not found after waiting`);
         socket.emit('file-error', { error: 'Room not found' });
         return;
       }
 
       const room = activeRooms.get(roomId);
       if (!room.project) {
-        socket.emit('file-error', { error: 'No project associated with this room' });
+        console.log(`✅ Successfully wrote file: ${filePath} (demo mode)`);
+        // Broadcast file change to all participants in demo mode
+        socket.to(roomId).emit('file-updated', { filePath, content });
+        socket.emit('file-saved', { filePath });
         return;
       }
 
       await FileSystemService.writeFile(room.project._id.toString(), filePath, content);
+      console.log(`✅ Successfully wrote file: ${filePath}`);
       
       // Broadcast file change to all participants
       socket.to(roomId).emit('file-updated', { filePath, content });
@@ -742,15 +773,29 @@ io.on('connection', async (socket) => {
   socket.on('refresh-files', async (data) => {
     try {
       const { roomId } = data;
+      console.log(`📁 Refresh files request for room: ${roomId}`);
+      
+      // CRITICAL: Wait for room to be established (fixes race condition)
+      let attempts = 0;
+      while (attempts < 5 && !activeRooms.has(roomId)) {
+        console.log(`⏳ Waiting for room ${roomId} to be initialized (attempt ${attempts + 1})`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        attempts++;
+      }
       
       if (!activeRooms.has(roomId)) {
+        console.error(`❌ Room ${roomId} not found after waiting`);
         socket.emit('file-error', { error: 'Room not found' });
         return;
       }
 
       const room = activeRooms.get(roomId);
       if (!room.project) {
-        socket.emit('file-error', { error: 'No project associated with this room' });
+        console.log('📁 Returning current file structure for demo room');
+        socket.emit('project-loaded', {
+          project: room.project,
+          files: room.files
+        });
         return;
       }
 
@@ -815,6 +860,52 @@ io.on('connection', async (socket) => {
     socket.emit('room-users', roomUsersList);
     
     console.log(`✅ ${userName} joined room ${roomId} with color ${userColor}`);
+  });
+
+  // Handle user heartbeat for presence management
+  socket.on('user-heartbeat', (data) => {
+    const { roomId, userId } = data;
+    console.log(`💗 Heartbeat from user ${userId} in room ${roomId}`);
+    
+    if (userPresence.has(userId)) {
+      userPresence.get(userId).lastActivity = Date.now();
+      userPresence.get(userId).isActive = true;
+    }
+    
+    if (roomUsers.has(roomId) && roomUsers.get(roomId).has(userId)) {
+      roomUsers.get(roomId).get(userId).lastSeen = Date.now();
+      roomUsers.get(roomId).get(userId).isActive = true;
+    }
+    
+    // Broadcast heartbeat response to room
+    socket.to(roomId).emit('user-heartbeat-response', {
+      userId,
+      timestamp: Date.now(),
+      isActive: true
+    });
+  });
+
+  // Handle user leaving
+  socket.on('user-leave', (data) => {
+    const { roomId, userId } = data;
+    console.log(`👋 User ${userId} leaving room ${roomId}`);
+    
+    // Update user presence
+    if (userPresence.has(userId)) {
+      userPresence.get(userId).isActive = false;
+    }
+    
+    // Update room users
+    if (roomUsers.has(roomId) && roomUsers.get(roomId).has(userId)) {
+      roomUsers.get(roomId).get(userId).isActive = false;
+      roomUsers.get(roomId).get(userId).lastSeen = Date.now();
+    }
+    
+    // Notify other users
+    socket.to(roomId).emit('user-left', {
+      userId,
+      timestamp: Date.now()
+    });
   });
 
   // Handle cursor position updates
