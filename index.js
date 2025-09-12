@@ -864,6 +864,9 @@ io.on('connection', async (socket) => {
     fileData.editingUsers.add(userId);
     fileData.lastModified = Date.now();
     
+    // Get user name from presence data
+    const userName = userPresence.has(userId) ? userPresence.get(userId).name : userId;
+    
     const operationData = {
       userId,
       userName,
