@@ -1123,23 +1123,11 @@ io.on('connection', async (socket) => {
   // ================== ENHANCED COLLABORATIVE FEATURES ==================
   
   // Real-time content synchronization (without saving)
-  socket.on('realtime-content-sync', ({ roomId, userId, filePath, content, selection, cursor }) => {
-    console.log(`🔄 Real-time content sync from ${userId} in ${filePath}`);
+  socket.on('realtime-content-sync', ({ roomId, userId, filePath, content, selection, cursor, userName }) => {
+    console.log(`🔄 Real-time content sync from ${userName || userId} in ${filePath} (${content?.length || 0} chars)`);
     
-    // Wait for room to be established
-    let attempts = 0;
-    const waitForRoom = async () => {
-      while (attempts < 5 && !activeRooms.has(roomId)) {
-        console.log(`⏳ Waiting for room ${roomId} for real-time sync (attempt ${attempts + 1})`);
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
-      
-      if (!activeRooms.has(roomId)) {
-        console.error(`❌ Room ${roomId} not found for real-time sync`);
-        return;
-      }
-      
+    // Immediate broadcast without waiting - speed is crucial for real-time collaboration
+    if (activeRooms.has(roomId)) {
       // Track real-time content
       if (!activeFiles.has(roomId)) {
         activeFiles.set(roomId, new Map());
@@ -1162,22 +1150,23 @@ io.on('connection', async (socket) => {
       const roomUser = roomUsers.has(roomId) && roomUsers.get(roomId).has(userId) 
         ? roomUsers.get(roomId).get(userId) 
         : null;
-      const userName = roomUser?.name || 
-                      (userPresence.has(userId) ? userPresence.get(userId).name : userId);
+      const finalUserName = userName || roomUser?.name || 
+                           (userPresence.has(userId) ? userPresence.get(userId).name : userId);
       
-      // Broadcast real-time content to other users
+      // IMMEDIATE broadcast to all other users in the room
+      console.log(`📡 Broadcasting real-time content to room ${roomId} (excluding ${userId})`);
       socket.to(roomId).emit('realtime-content-sync', {
         userId,
-        userName,
+        userName: finalUserName,
         filePath,
         content,
         selection,
         cursor,
         timestamp: Date.now()
       });
-    };
-    
-    waitForRoom();
+    } else {
+      console.warn(`⚠️ Room ${roomId} not active for real-time sync`);
+    }
   });
 
   // Enhanced typing indicators with line information
