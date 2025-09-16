@@ -19,5 +19,7 @@ services:
         generateValue: true
       - key: WORKSPACE_DIR
         value: /tmp/workspace
+      - key: MONGODB_URI
+        value: mongodb+srv://aniketkorwa:colabDev@cluster0.e7xcg8n.mongodb.net/collaborative-editor?retryWrites=true&w=majority&appName=Cluster0
     # Auto-deploy from main branch
     autoDeploy: true
