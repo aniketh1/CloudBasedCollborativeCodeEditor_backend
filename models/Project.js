@@ -1,13 +1,11 @@
 const { ObjectId } = require('mongodb');
 const { getDatabase } = require('../config/database');
 const path = require('path');
-const fs = require('fs').promises;
 
 class Project {
   constructor(projectData) {
     this.name = projectData.name;
     this.description = projectData.description || '';
-    this.localPath = projectData.localPath;
     this.createdBy = projectData.createdBy;
     this.participants = projectData.participants || [];
     this.roomId = projectData.roomId;
@@ -27,15 +25,6 @@ class Project {
     try {
       const db = getDatabase();
       const collection = db.collection('projects');
-
-      // Validate local path exists
-      if (this.localPath) {
-        try {
-          await fs.access(this.localPath);
-        } catch (error) {
-          throw new Error(`Local path does not exist: ${this.localPath}`);
-        }
-      }
 
       // Convert createdBy to ObjectId if it's a valid ObjectId string, otherwise use as string
       let createdByQuery;
@@ -58,7 +47,6 @@ class Project {
       const result = await collection.insertOne({
         name: this.name,
         description: this.description,
-        localPath: this.localPath,
         createdBy: createdByQuery,
         participants: this.participants.map(id => ObjectId.isValid(id) ? new ObjectId(id) : id),
         roomId: this.roomId,
@@ -281,7 +269,7 @@ class Project {
     }
   }
 
-  // Validate project path access
+  // Validate project path access (MongoDB-based file system)
   static async validatePathAccess(projectId, requestedPath) {
     try {
       const project = await this.findById(projectId);
@@ -289,19 +277,11 @@ class Project {
         return { valid: false, reason: 'Project not found' };
       }
 
-      const normalizedProjectPath = path.resolve(project.localPath);
-      const normalizedRequestedPath = path.resolve(requestedPath);
-
-      // Check if requested path is within project directory
-      if (!normalizedRequestedPath.startsWith(normalizedProjectPath)) {
-        return { valid: false, reason: 'Path outside project directory' };
-      }
-
+      // For MongoDB-based file system, we validate against virtual paths
       // Check restricted paths
       const restrictedPaths = project.settings.restrictedPaths || [];
       for (const restrictedPath of restrictedPaths) {
-        const normalizedRestrictedPath = path.resolve(path.join(normalizedProjectPath, restrictedPath));
-        if (normalizedRequestedPath.startsWith(normalizedRestrictedPath)) {
+        if (requestedPath.startsWith(restrictedPath)) {
           return { valid: false, reason: 'Access to restricted path denied' };
         }
       }
