@@ -3,17 +3,25 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
+const { connectDB: connectMongoDB } = require('./config/database');
 const fileSystemService = require('./services/FileSystemService');
 require('dotenv').config();
 
 const app = express();
 
-// MongoDB Connection
+// MongoDB Connection (both Mongoose and native MongoDB driver)
 const connectDB = async () => {
   try {
     const mongoURI = process.env.MONGODB_URI || "mongodb+srv://aniketkorwa:colabDev@cluster0.e7xcg8n.mongodb.net/collaborative-editor?retryWrites=true&w=majority&appName=Cluster0";
+    
+    // Connect with Mongoose for file system
     await mongoose.connect(mongoURI);
-    console.log('✅ MongoDB connected successfully');
+    console.log('✅ Mongoose connected successfully');
+    
+    // Connect with native driver for projects
+    await connectMongoDB();
+    console.log('✅ Native MongoDB driver connected successfully');
+    
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
     process.exit(1);
