@@ -27,10 +27,10 @@ router.get('/structure/:roomId', asyncHandler(async (req, res) => {
   });
 }));
 
-// Get file content
-router.get('/file/:roomId', asyncHandler(async (req, res) => {
+// Get file content using POST to send path in body
+router.post('/get-file/:roomId', asyncHandler(async (req, res) => {
   const { roomId } = req.params;
-  const filePath = req.query.path || '/';
+  const { filePath } = req.body;
   
   if (!roomId || !filePath) {
     return res.status(400).json({
@@ -50,9 +50,9 @@ router.get('/file/:roomId', asyncHandler(async (req, res) => {
 }));
 
 // Create or update file
-router.post('/file/:roomId', asyncHandler(async (req, res) => {
+router.post('/save-file/:roomId', asyncHandler(async (req, res) => {
   const { roomId } = req.params;
-  const { path: filePath, content, userId } = req.body;
+  const { filePath, content, userId } = req.body;
   
   if (!roomId || !filePath || !userId) {
     return res.status(400).json({
@@ -86,9 +86,9 @@ router.post('/file/:roomId', asyncHandler(async (req, res) => {
 }));
 
 // Create folder
-router.post('/folder/:roomId', asyncHandler(async (req, res) => {
+router.post('/create-folder/:roomId', asyncHandler(async (req, res) => {
   const { roomId } = req.params;
-  const { path: folderPath, userId } = req.body;
+  const { folderPath, userId } = req.body;
   
   if (!roomId || !folderPath || !userId) {
     return res.status(400).json({
@@ -121,9 +121,9 @@ router.post('/folder/:roomId', asyncHandler(async (req, res) => {
 }));
 
 // Delete file
-router.delete('/file/:roomId', asyncHandler(async (req, res) => {
+router.post('/delete-file/:roomId', asyncHandler(async (req, res) => {
   const { roomId } = req.params;
-  const filePath = req.query.path;
+  const { filePath } = req.body;
   
   if (!roomId || !filePath) {
     return res.status(400).json({
@@ -149,9 +149,9 @@ router.delete('/file/:roomId', asyncHandler(async (req, res) => {
 }));
 
 // Delete folder
-router.delete('/folder/:roomId', asyncHandler(async (req, res) => {
+router.post('/delete-folder/:roomId', asyncHandler(async (req, res) => {
   const { roomId } = req.params;
-  const folderPath = req.query.path;
+  const { folderPath } = req.body;
   
   if (!roomId || !folderPath) {
     return res.status(400).json({
