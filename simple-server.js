@@ -48,13 +48,36 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Error handling middleware for JSON parsing
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Invalid JSON in request body' 
+    });
+  }
+  next();
+});
+
 // API Routes
 const filesystemRoutes = require('./routes/filesystem-mongo');
 app.use('/api/filesystem', filesystemRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `API endpoint ${req.originalUrl} not found`
+  });
 });
 
 const server = http.createServer(app);
