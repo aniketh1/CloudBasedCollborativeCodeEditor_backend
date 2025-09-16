@@ -7,8 +7,22 @@ const fileSystemService = require('./services/FileSystemService');
 const app = express();
 
 // CORS configuration
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://cloud-based-collborative-code-editor.vercel.app",
+  "https://collaborative-code-editor-frontend.vercel.app"
+];
+
+// Add environment-specific origins
+if (process.env.CORS_ORIGIN) {
+  allowedOrigins.push(process.env.CORS_ORIGIN);
+}
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
 const corsOptions = {
-  origin: ["http://localhost:3000"],
+  origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
