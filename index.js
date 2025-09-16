@@ -1759,7 +1759,6 @@ io.on('connection', async (socket) => {
       }
     }
   });
-});
 
 const PORT = process.env.PORT || 3001;
 
