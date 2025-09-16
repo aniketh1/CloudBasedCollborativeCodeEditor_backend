@@ -61,7 +61,12 @@ app.use((err, req, res, next) => {
 
 // API Routes
 const filesystemRoutes = require('./routes/filesystem-mongo');
+const projectRoutes = require('./routes/projects');
+const roomRoutes = require('./routes/rooms');
+
 app.use('/api/filesystem', filesystemRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/rooms', roomRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
