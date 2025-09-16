@@ -2,9 +2,26 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
+const mongoose = require('mongoose');
 const fileSystemService = require('./services/FileSystemService');
+require('dotenv').config();
 
 const app = express();
+
+// MongoDB Connection
+const connectDB = async () => {
+  try {
+    const mongoURI = process.env.MONGODB_URI || "mongodb+srv://aniketkorwa:colabDev@cluster0.e7xcg8n.mongodb.net/collaborative-editor?retryWrites=true&w=majority&appName=Cluster0";
+    await mongoose.connect(mongoURI);
+    console.log('✅ MongoDB connected successfully');
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error);
+    process.exit(1);
+  }
+};
+
+// Initialize database connection
+connectDB();
 
 // CORS configuration
 const allowedOrigins = [
@@ -30,6 +47,10 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// API Routes
+const filesystemRoutes = require('./routes/filesystem-mongo');
+app.use('/api/filesystem', filesystemRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
