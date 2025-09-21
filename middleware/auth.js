@@ -1,9 +1,31 @@
 const jwt = require('jsonwebtoken');
-const Session = require('../models/Session');
+// const Session = require('../models/Session');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
 
-// Middleware to authenticate JWT token
+// Simple auth middleware for testing (without Clerk)
+const auth = async (req, res, next) => {
+  try {
+    // For testing purposes, create a mock user
+    // In production, this would validate Clerk tokens or JWT
+    req.user = {
+      userId: req.headers['x-user-id'] || 'test-user-' + Math.random().toString(36).substr(2, 9),
+      sessionId: 'test-session-' + Math.random().toString(36).substr(2, 9),
+      name: req.headers['x-user-name'] || 'Test User',
+      email: req.headers['x-user-email'] || 'test@example.com'
+    };
+
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication failed'
+    });
+  }
+};
+
+// Middleware to authenticate JWT token (legacy - for reference)
 const authenticateToken = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -19,20 +41,20 @@ const authenticateToken = async (req, res, next) => {
     // Verify JWT token
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Validate session
-    const sessionValidation = await Session.validateSession(decoded.sessionId);
-    if (!sessionValidation.valid) {
-      return res.status(401).json({
-        success: false,
-        error: sessionValidation.reason
-      });
-    }
+    // For now, skip session validation since we're restructuring
+    // const sessionValidation = await Session.validateSession(decoded.sessionId);
+    // if (!sessionValidation.valid) {
+    //   return res.status(401).json({
+    //     success: false,
+    //     error: sessionValidation.reason
+    //   });
+    // }
 
     // Add user info to request
     req.user = {
       userId: decoded.userId,
-      sessionId: decoded.sessionId,
-      session: sessionValidation.session
+      sessionId: decoded.sessionId || 'mock-session',
+      // session: sessionValidation.session
     };
 
     next();
@@ -218,6 +240,7 @@ const createRateLimit = (windowMs, maxRequests) => {
   };
 };
 module.exports = {
+  auth,
   authenticateToken,
   authenticateSocket,
   optionalAuth,

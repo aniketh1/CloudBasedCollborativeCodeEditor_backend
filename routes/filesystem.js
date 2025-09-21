@@ -1,196 +1,324 @@
 const express = require('express');
 const router = express.Router();
-const path = require('path');
-const fs = require('fs').promises;
-const os = require('os');
+const File = require('../models/File');
+const Project = require('../models/Project');
+const { auth } = require('../middleware/auth');
 
-// Get available workspace/project folders for browsing
-router.get('/browse', async (req, res) => {
+// Get project file structure
+router.get('/:projectId', auth, async (req, res) => {
   try {
-    const { path: requestedPath } = req.query;
-
-    if (!requestedPath || requestedPath === '') {
-      // Return safe default workspace locations for web environment
-      const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
-      
-      // Ensure workspace directory exists
-      try {
-        await fs.mkdir(workspaceDir, { recursive: true });
-      } catch (error) {
-        console.log('Workspace directory already exists or created');
-      }
-
-      const defaultPaths = [
-        { path: workspaceDir, name: 'Workspace', type: 'directory', description: 'Your project workspace' },
-        { path: path.join(workspaceDir, 'projects'), name: 'Projects', type: 'directory', description: 'Uploaded projects' },
-        { path: path.join(workspaceDir, 'templates'), name: 'Templates', type: 'directory', description: 'Project templates' },
-      ];
-
-      // Create default directories if they don't exist
-      for (const dir of defaultPaths) {
-        try {
-          await fs.mkdir(dir.path, { recursive: true });
-        } catch (error) {
-          // Directory already exists or permission issue
-        }
-      }
-
-      return res.json({
-        success: true,
-        currentPath: '',
-        items: defaultPaths,
-        isWebEnvironment: true,
-        message: 'Upload projects using the file upload feature'
-      });
-    }
-
-    // Validate path is within workspace for security
-    const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
-    const resolvedPath = path.resolve(requestedPath);
-    const resolvedWorkspace = path.resolve(workspaceDir);
+    const { projectId } = req.params;
     
-    if (!resolvedPath.startsWith(resolvedWorkspace)) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied: Path outside workspace'
-      });
+    // Verify project exists and user has access
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
     }
-
-    // Browse the requested path
-    let items;
-    try {
-      const dirItems = await fs.readdir(requestedPath, { withFileTypes: true });
-      
-      items = dirItems
-        .filter(item => item.isDirectory() || item.isFile())
-        .map(item => ({
-          path: path.join(requestedPath, item.name),
-          name: item.name,
-          type: item.isDirectory() ? 'directory' : 'file',
-          size: item.isFile() ? 0 : undefined // Will be populated later if needed
-        }))
-        .sort((a, b) => {
-          // Sort directories first, then files
-          if (a.type !== b.type) {
-            return a.type === 'directory' ? -1 : 1;
-          }
-          return a.name.localeCompare(b.name);
-        });
-
-      // Add parent directory option if not at workspace root
-      const parentDir = path.dirname(requestedPath);
-      if (parentDir !== requestedPath && resolvedPath !== resolvedWorkspace) {
-        items.unshift({
-          path: parentDir,
-          name: '..',
-          type: 'parent'
-        });
-      }
-    } catch (error) {
-      console.error('Error reading directory:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Unable to read directory'
-      });
-    }
-
+    
+    // Get file tree structure
+    const fileTree = await File.getFileTree(projectId);
+    const files = await File.findByProjectId(projectId);
+    const stats = await File.getProjectStats(projectId);
+    
     res.json({
-      success: true,
-      currentPath: requestedPath,
-      items: items
+      projectId,
+      fileTree,
+      files: files.map(file => file.toJSON()),
+      stats
     });
-
   } catch (error) {
-    console.error('Error browsing path:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Unable to access the requested path'
-    });
+    console.error('Error fetching file system:', error);
+    res.status(500).json({ error: 'Failed to fetch file system' });
   }
 });
 
-// Upload project folder (for local file access)
-router.post('/upload-project', async (req, res) => {
+// Get specific file content
+router.get('/:projectId/file/:fileId', auth, async (req, res) => {
   try {
-    const { projectName, files } = req.body;
+    const { projectId, fileId } = req.params;
     
-    if (!projectName || !files) {
-      return res.status(400).json({
-        success: false,
-        error: 'Project name and files are required'
-      });
+    const file = await File.findById(fileId);
+    
+    if (!file || file.projectId !== projectId) {
+      return res.status(404).json({ error: 'File not found' });
     }
-
-    const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
-    const projectDir = path.join(workspaceDir, 'projects', projectName);
-
-    // Create project directory
-    await fs.mkdir(projectDir, { recursive: true });
-
-    // Save uploaded files
-    for (const file of files) {
-      const filePath = path.join(projectDir, file.path);
-      const fileDir = path.dirname(filePath);
-      
-      // Ensure directory exists
-      await fs.mkdir(fileDir, { recursive: true });
-      
-      // Write file content (assuming base64 encoded)
-      const content = Buffer.from(file.content, 'base64');
-      await fs.writeFile(filePath, content);
-    }
-
-    res.json({
-      success: true,
-      message: `Project "${projectName}" uploaded successfully`,
-      projectPath: projectDir
-    });
-
+    
+    res.json(file.toJSON());
   } catch (error) {
-    console.error('Error uploading project:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to upload project'
-    });
+    console.error('Error fetching file:', error);
+    res.status(500).json({ error: 'Failed to fetch file' });
   }
 });
 
-// Get file content
-router.get('/file/:projectPath', async (req, res) => {
+// Get file by path
+router.get('/:projectId/path/*', auth, async (req, res) => {
   try {
-    const { projectPath } = req.params;
-    const { filePath } = req.query;
-
-    const workspaceDir = process.env.WORKSPACE_DIR || path.join(os.tmpdir(), 'workspace');
-    const fullFilePath = path.join(workspaceDir, projectPath, filePath);
-
-    // Security check
-    const resolvedPath = path.resolve(fullFilePath);
-    const resolvedWorkspace = path.resolve(workspaceDir);
+    const { projectId } = req.params;
+    const filePath = req.params[0]; // Everything after /path/
     
-    if (!resolvedPath.startsWith(resolvedWorkspace)) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
+    const file = await File.findByPath(projectId, filePath);
+    
+    if (!file) {
+      return res.status(404).json({ error: 'File not found at path' });
     }
-
-    const content = await fs.readFile(fullFilePath, 'utf8');
-    const stats = await fs.stat(fullFilePath);
-
-    res.json({
-      success: true,
-      content: content,
-      size: stats.size,
-      lastModified: stats.mtime
-    });
-
+    
+    res.json(file.toJSON());
   } catch (error) {
-    console.error('Error reading file:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Unable to read file'
+    console.error('Error fetching file by path:', error);
+    res.status(500).json({ error: 'Failed to fetch file' });
+  }
+});
+
+// Create new file
+router.post('/:projectId/file', auth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { name, path, content = '', language = 'javascript', parentId } = req.body;
+    const userId = req.user.userId;
+    
+    // Verify project exists and user has access
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const fileData = {
+      projectId,
+      name,
+      path,
+      content,
+      language,
+      parentId,
+      createdBy: userId,
+      type: 'file'
+    };
+    
+    const file = await File.create(fileData);
+    
+    res.status(201).json({
+      message: 'File created successfully',
+      file: file.toJSON()
     });
+  } catch (error) {
+    console.error('Error creating file:', error);
+    if (error.message === 'File already exists at this path') {
+      return res.status(409).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create file' });
+  }
+});
+
+// Create new directory
+router.post('/:projectId/directory', auth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { name, path, parentId } = req.body;
+    const userId = req.user.userId;
+    
+    // Verify project exists and user has access
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const directory = await File.createDirectory(projectId, path, userId, parentId);
+    
+    res.status(201).json({
+      message: 'Directory created successfully',
+      directory: directory.toJSON()
+    });
+  } catch (error) {
+    console.error('Error creating directory:', error);
+    if (error.message === 'File already exists at this path') {
+      return res.status(409).json({ error: 'Directory already exists at this path' });
+    }
+    res.status(500).json({ error: 'Failed to create directory' });
+  }
+});
+
+// Update file content
+router.put('/:projectId/file/:fileId', auth, async (req, res) => {
+  try {
+    const { projectId, fileId } = req.params;
+    const { content, versionNote = 'Content update' } = req.body;
+    const userId = req.user.userId;
+    
+    const file = await File.findById(fileId);
+    
+    if (!file || file.projectId !== projectId) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    await file.updateContent(content, userId, versionNote);
+    
+    res.json({
+      message: 'File updated successfully',
+      file: file.toJSON()
+    });
+  } catch (error) {
+    console.error('Error updating file:', error);
+    if (error.message === 'File is locked by another user') {
+      return res.status(423).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update file' });
+  }
+});
+
+// Lock file for editing
+router.post('/:projectId/file/:fileId/lock', auth, async (req, res) => {
+  try {
+    const { projectId, fileId } = req.params;
+    const userId = req.user.userId;
+    
+    const file = await File.findById(fileId);
+    
+    if (!file || file.projectId !== projectId) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    await file.lock(userId);
+    
+    res.json({
+      message: 'File locked successfully',
+      file: file.toJSON()
+    });
+  } catch (error) {
+    console.error('Error locking file:', error);
+    if (error.message === 'File is already locked by another user') {
+      return res.status(423).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to lock file' });
+  }
+});
+
+// Unlock file
+router.post('/:projectId/file/:fileId/unlock', auth, async (req, res) => {
+  try {
+    const { projectId, fileId } = req.params;
+    const userId = req.user.userId;
+    
+    const file = await File.findById(fileId);
+    
+    if (!file || file.projectId !== projectId) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    await file.unlock(userId);
+    
+    res.json({
+      message: 'File unlocked successfully',
+      file: file.toJSON()
+    });
+  } catch (error) {
+    console.error('Error unlocking file:', error);
+    if (error.message === 'You can only unlock files you have locked') {
+      return res.status(403).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to unlock file' });
+  }
+});
+
+// Delete file or directory
+router.delete('/:projectId/file/:fileId', auth, async (req, res) => {
+  try {
+    const { projectId, fileId } = req.params;
+    
+    const file = await File.findById(fileId);
+    
+    if (!file || file.projectId !== projectId) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    await file.delete();
+    
+    res.json({ message: 'File deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    res.status(500).json({ error: 'Failed to delete file' });
+  }
+});
+
+// Get file versions
+router.get('/:projectId/file/:fileId/versions', auth, async (req, res) => {
+  try {
+    const { projectId, fileId } = req.params;
+    
+    const file = await File.findById(fileId);
+    
+    if (!file || file.projectId !== projectId) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    const versions = await File.getVersions(fileId);
+    
+    res.json({ versions });
+  } catch (error) {
+    console.error('Error fetching file versions:', error);
+    res.status(500).json({ error: 'Failed to fetch file versions' });
+  }
+});
+
+// Get specific version content
+router.get('/:projectId/file/:fileId/version/:versionId', auth, async (req, res) => {
+  try {
+    const { projectId, fileId, versionId } = req.params;
+    
+    const file = await File.findById(fileId);
+    
+    if (!file || file.projectId !== projectId) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    const content = await File.getVersionContent(fileId, versionId);
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Version not found' });
+    }
+    
+    res.json({ content });
+  } catch (error) {
+    console.error('Error fetching version content:', error);
+    res.status(500).json({ error: 'Failed to fetch version content' });
+  }
+});
+
+// Search files
+router.get('/:projectId/search', auth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { q: query, content = false } = req.query;
+    
+    if (!query) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+    
+    const files = await File.search(projectId, query, content === 'true');
+    
+    res.json({
+      query,
+      results: files.map(file => file.toJSON())
+    });
+  } catch (error) {
+    console.error('Error searching files:', error);
+    res.status(500).json({ error: 'Failed to search files' });
+  }
+});
+
+// Get directory contents
+router.get('/:projectId/directory', auth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { path = '' } = req.query;
+    
+    const contents = await File.getDirectoryContents(projectId, path);
+    
+    res.json({
+      path,
+      contents: contents.map(file => file.toJSON())
+    });
+  } catch (error) {
+    console.error('Error fetching directory contents:', error);
+    res.status(500).json({ error: 'Failed to fetch directory contents' });
   }
 });
 

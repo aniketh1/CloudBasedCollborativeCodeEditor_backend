@@ -1,5 +1,6 @@
-const { MongoClient, ObjectId } = require('mongodb');
+const { ObjectId } = require('mongodb');
 const { v4: uuidv4 } = require('uuid');
+const { getDatabase } = require('../config/database');
 
 class File {
   constructor(data) {
@@ -22,15 +23,13 @@ class File {
   }
 
   // Get database connection
-  static async getDatabase() {
-    const client = new MongoClient(process.env.MONGODB_URI);
-    await client.connect();
-    return client.db('codedev');
+  static getDatabase() {
+    return getDB();
   }
 
   // Create a new file
   static async create(fileData) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     const file = new File(fileData);
@@ -56,7 +55,7 @@ class File {
 
   // Get file by ID
   static async findById(fileId) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     const file = await filesCollection.findOne({ fileId });
@@ -65,7 +64,7 @@ class File {
 
   // Get files by project ID
   static async findByProjectId(projectId) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     const files = await filesCollection.find({ projectId }).sort({ path: 1 }).toArray();
@@ -74,7 +73,7 @@ class File {
 
   // Get file by path within project
   static async findByPath(projectId, path) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     const file = await filesCollection.findOne({ projectId, path });
@@ -186,7 +185,7 @@ class File {
 
   // Create a new file version
   static async createVersion(fileId, content, createdBy, note = '') {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const versionsCollection = db.collection('fileVersions');
     
     const version = {
@@ -205,7 +204,7 @@ class File {
 
   // Get file versions
   static async getVersions(fileId) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const versionsCollection = db.collection('fileVersions');
     
     const versions = await versionsCollection
@@ -218,7 +217,7 @@ class File {
 
   // Get specific version content
   static async getVersionContent(fileId, versionId) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const versionsCollection = db.collection('fileVersions');
     
     const version = await versionsCollection.findOne({ fileId, versionId });
@@ -243,7 +242,7 @@ class File {
 
   // Get directory contents
   static async getDirectoryContents(projectId, directoryPath = '') {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     // Get immediate children of the directory
@@ -303,7 +302,7 @@ class File {
 
   // Search files by content or name
   static async search(projectId, query, searchContent = false) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     const searchQuery = {
@@ -325,7 +324,7 @@ class File {
 
   // Get project statistics
   static async getProjectStats(projectId) {
-    const db = await this.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     const stats = await filesCollection.aggregate([
