@@ -1,127 +1,272 @@
-const fs = require('fs').promises;
-const path = require('path');
+const File = require('../models/File');
 
 class ProjectTemplateService {
+  // Create default files for a new project
+  static async createDefaultFiles(projectId, userId, templateType = 'javascript') {
+    const defaultFiles = this.getTemplateFiles(templateType);
+    const createdFiles = [];
+
+    try {
+      for (const fileTemplate of defaultFiles) {
+        const fileData = {
+          projectId,
+          name: fileTemplate.name,
+          path: fileTemplate.path,
+          content: fileTemplate.content,
+          language: fileTemplate.language,
+          type: fileTemplate.type,
+          createdBy: userId
+        };
+
+        const file = await File.create(fileData);
+        createdFiles.push(file);
+      }
+
+      return createdFiles;
+    } catch (error) {
+      console.error('Error creating default files:', error);
+      throw error;
+    }
+  }
+
+  // Get template files based on project type
+  static getTemplateFiles(templateType) {
+    const templates = {
+      javascript: [
+        {
+          name: 'index.js',
+          path: 'index.js',
+          type: 'file',
+          language: 'javascript',
+          content: `// Welcome to your new JavaScript project!
+// Start coding here...
+
+console.log('Hello, World! 🎉');
+
+// Example function
+function greet(name) {
+  return \`Hello, \${name}! Welcome to collaborative coding.\`;
+}
+
+// Example usage
+const message = greet('Developer');
+console.log(message);
+
+// TODO: Add your amazing code here!
+`
+        },
+        {
+          name: 'README.md',
+          path: 'README.md',
+          type: 'file',
+          language: 'markdown',
+          content: `# My Awesome Project
+
+Welcome to your collaborative coding project! 🚀
+
+## Getting Started
+
+This project is set up for real-time collaboration. You can:
+
+- ✅ Share this link with teammates
+- ✅ Code together in real-time
+- ✅ See live cursors and typing indicators
+- ✅ Track file versions and changes
+
+## Project Structure
+
+\`\`\`
+├── index.js          # Main application file
+├── README.md         # Project documentation
+├── src/              # Source code directory
+│   └── components/   # Reusable components
+└── tests/            # Test files
+\`\`\`
+
+## Features
+
+- Real-time collaborative editing
+- File versioning and history
+- Live user presence indicators
+- Advanced Monaco editor with IntelliSense
+- Cross-platform compatibility
+
+## Getting Started
+
+1. Start editing files in the editor
+2. Share the collaboration link with your team
+3. Code together in real-time!
+
+Happy coding! 🎉
+`
+        },
+        {
+          name: 'src',
+          path: 'src',
+          type: 'directory',
+          language: '',
+          content: ''
+        },
+        {
+          name: 'main.js',
+          path: 'src/main.js',
+          type: 'file',
+          language: 'javascript',
+          content: `// Main application logic
+// This file contains the core functionality of your app
+
+class App {
   constructor() {
-    this.templates = {
-      react: {
-        name: 'React App',
-        description: 'A modern React application with hooks',
-        icon: 'React',
-        files: {
-          'src/App.js': `import React, { useState } from 'react';
-import './App.css';
+    this.name = 'Collaborative Code Editor';
+    this.version = '1.0.0';
+    this.init();
+  }
 
-function App() {
-  const [count, setCount] = useState(0);
+  init() {
+    console.log(\`\${this.name} v\${this.version} initialized!\`);
+    this.setupEventListeners();
+  }
 
-  return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Welcome to React!</h1>
-        <div className="counter">
-          <p>Count: {count}</p>
-          <button onClick={() => setCount(count + 1)}>
-            Increment
-          </button>
-          <button onClick={() => setCount(count - 1)}>
-            Decrement
-          </button>
-        </div>
-        <p>Edit src/App.js and collaborate in real-time!</p>
-      </header>
-    </div>
-  );
+  setupEventListeners() {
+    // Add your event listeners here
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('DOM fully loaded');
+    });
+  }
+
+  // Add your methods here
+  render() {
+    // Render your app
+  }
 }
 
-export default App;`,
+// Initialize the app
+const app = new App();
 
-          'src/App.css': `.App {
-  text-align: center;
+export default app;
+`
+        },
+        {
+          name: 'components',
+          path: 'src/components',
+          type: 'directory',
+          language: '',
+          content: ''
+        },
+        {
+          name: 'utils.js',
+          path: 'src/utils.js',
+          type: 'file',
+          language: 'javascript',
+          content: `// Utility functions for your project
+
+/**
+ * Debounce function to limit the rate of function calls
+ * @param {Function} func - The function to debounce
+ * @param {number} wait - The number of milliseconds to wait
+ * @returns {Function} The debounced function
+ */
+export function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
-.App-header {
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+/**
+ * Throttle function to limit the rate of function calls
+ * @param {Function} func - The function to throttle
+ * @param {number} limit - The number of milliseconds to wait
+ * @returns {Function} The throttled function
+ */
+export function throttle(func, limit) {
+  let inThrottle;
+  return function() {
+    const args = arguments;
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
 }
 
-.counter {
-  margin: 20px 0;
+/**
+ * Generate a random ID
+ * @param {number} length - The length of the ID
+ * @returns {string} A random ID
+ */
+export function generateId(length = 8) {
+  return Math.random().toString(36).substring(2, length + 2);
 }
 
-.counter button {
-  margin: 0 10px;
-  padding: 10px 20px;
-  font-size: 16px;
-  background-color: #61dafb;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  color: #282c34;
-  font-weight: bold;
+/**
+ * Format date to readable string
+ * @param {Date} date - The date to format
+ * @returns {string} Formatted date string
+ */
+export function formatDate(date) {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
+`
+        },
+        {
+          name: 'tests',
+          path: 'tests',
+          type: 'directory',
+          language: '',
+          content: ''
+        },
+        {
+          name: 'app.test.js',
+          path: 'tests/app.test.js',
+          type: 'file',
+          language: 'javascript',
+          content: `// Test file for your application
+// Add your tests here
 
-.counter button:hover {
-  background-color: #21b7d4;
-}
+describe('App Tests', () => {
+  test('should initialize correctly', () => {
+    // Add your test logic here
+    expect(true).toBe(true);
+  });
 
-.counter p {
-  font-size: 18px;
-  margin: 10px 0;
-}`,
+  test('should handle user input', () => {
+    // Add your test logic here
+    expect(true).toBe(true);
+  });
+});
 
-          'src/index.js': `import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
+// Example test for utils
+describe('Utils Tests', () => {
+  test('generateId should return string of correct length', () => {
+    // Test your utility functions
+    expect(true).toBe(true);
+  });
+});
+`
+        }
+      ],
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);`,
-
-          'src/index.css': `body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}`,
-
-          'public/index.html': `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="React App created with Collaborative Code Editor" />
-    <title>React Collaborative Project</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-  </body>
-</html>`,
-
-          'package.json': `{
+      react: [
+        {
+          name: 'package.json',
+          path: 'package.json',
+          type: 'file',
+          language: 'json',
+          content: `{
   "name": "react-collaborative-project",
   "version": "0.1.0",
   "private": true,
@@ -136,6 +281,12 @@ code {
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
   "browserslist": {
     "production": [
       ">0.2%",
@@ -148,627 +299,445 @@ code {
       "last 1 safari version"
     ]
   }
-}`,
+}
+`
+        },
+        {
+          name: 'App.js',
+          path: 'src/App.js',
+          type: 'file',
+          language: 'javascript',
+          content: `import React, { useState, useEffect } from 'react';
+import './App.css';
 
-          'README.md': `# React Collaborative Project
+function App() {
+  const [message, setMessage] = useState('');
+  const [collaborators, setCollaborators] = useState([]);
 
-This project was created with the Collaborative Code Editor.
+  useEffect(() => {
+    setMessage('Welcome to Collaborative React Development! 🎉');
+  }, []);
 
-## Features
-- Modern React with Hooks
-- Hot Reload
-- CSS Styling
-- Real-time Collaboration
-
-## Getting Started
-
-1. Install dependencies: npm install
-2. Start development: npm start
-3. Build for production: npm run build
-
-Happy coding!`
-        }
-      },
-
-      nodejs: {
-        name: 'Node.js API',
-        description: 'Express.js REST API with modern features',
-        icon: 'Node',
-        files: {
-          'server.js': `const express = require('express');
-const cors = require('cors');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
-
-// Sample data
-let users = [
-  { id: 1, name: 'John Doe', email: 'john@example.com', role: 'admin' },
-  { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'user' },
-  { id: 3, name: 'Bob Johnson', email: 'bob@example.com', role: 'user' }
-];
-
-// Routes
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to the Collaborative API!',
-    version: '1.0.0',
-    endpoints: {
-      users: '/api/users',
-      health: '/health'
-    }
-  });
-});
-
-// Get all users
-app.get('/api/users', (req, res) => {
-  res.json({
-    success: true,
-    data: users,
-    count: users.length
-  });
-});
-
-// Get user by ID
-app.get('/api/users/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const user = users.find(u => u.id === id);
-  
-  if (!user) {
-    return res.status(404).json({
-      success: false,
-      message: 'User not found'
-    });
-  }
-  
-  res.json({
-    success: true,
-    data: user
-  });
-});
-
-// Create new user
-app.post('/api/users', (req, res) => {
-  const { name, email, role = 'user' } = req.body;
-  
-  if (!name || !email) {
-    return res.status(400).json({
-      success: false,
-      message: 'Name and email are required'
-    });
-  }
-  
-  const newUser = {
-    id: Math.max(...users.map(u => u.id)) + 1,
-    name,
-    email,
-    role
+  const handleInputChange = (e) => {
+    setMessage(e.target.value);
   };
-  
-  users.push(newUser);
-  
-  res.status(201).json({
-    success: true,
-    data: newUser,
-    message: 'User created successfully'
-  });
-});
 
-// Update user
-app.put('/api/users/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const userIndex = users.findIndex(u => u.id === id);
-  
-  if (userIndex === -1) {
-    return res.status(404).json({
-      success: false,
-      message: 'User not found'
-    });
-  }
-  
-  const { name, email, role } = req.body;
-  
-  if (name) users[userIndex].name = name;
-  if (email) users[userIndex].email = email;
-  if (role) users[userIndex].role = role;
-  
-  res.json({
-    success: true,
-    data: users[userIndex],
-    message: 'User updated successfully'
-  });
-});
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>🚀 Collaborative React Project</h1>
+        <p>{message}</p>
+        
+        <div className="features">
+          <h2>Features:</h2>
+          <ul>
+            <li>✅ Real-time collaboration</li>
+            <li>✅ Live cursor tracking</li>
+            <li>✅ File versioning</li>
+            <li>✅ Team presence indicators</li>
+          </ul>
+        </div>
 
-// Delete user
-app.delete('/api/users/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const userIndex = users.findIndex(u => u.id === id);
-  
-  if (userIndex === -1) {
-    return res.status(404).json({
-      success: false,
-      message: 'User not found'
-    });
-  }
-  
-  users.splice(userIndex, 1);
-  
-  res.json({
-    success: true,
-    message: 'User deleted successfully'
-  });
-});
+        <div className="input-section">
+          <input
+            type="text"
+            placeholder="Type something collaborative..."
+            value={message}
+            onChange={handleInputChange}
+            className="collaborative-input"
+          />
+        </div>
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: '1.0.0',
-    users_count: users.length
-  });
-});
+        <div className="collaborators">
+          <h3>Online Collaborators: {collaborators.length}</h3>
+          {collaborators.map((user, index) => (
+            <span key={index} className="collaborator-badge">
+              {user.name}
+            </span>
+          ))}
+        </div>
+      </header>
+    </div>
+  );
+}
 
-// Error handling middleware
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Endpoint not found',
-    available_endpoints: [
-      '/',
-      '/api/users',
-      '/health'
-    ]
-  });
-});
+export default App;
+`
+        },
+        {
+          name: 'App.css',
+          path: 'src/App.css',
+          type: 'file',
+          language: 'css',
+          content: `.App {
+  text-align: center;
+}
 
-app.use((error, req, res, next) => {
-  console.error('Error:', error);
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error'
-  });
-});
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
 
-app.listen(PORT, () => {
-  console.log(\`Server running on port \${PORT}\`);
-  console.log(\`API docs available at http://localhost:\${PORT}\`);
-});`,
+.features {
+  margin: 20px 0;
+  text-align: left;
+}
 
-          'package.json': `{
-  "name": "nodejs-collaborative-api",
-  "version": "1.0.0",
-  "description": "Express.js API created with Collaborative Code Editor",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "test": "echo \\"Error: no test specified\\" && exit 1"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
-  "keywords": ["nodejs", "express", "api", "collaborative", "rest"],
-  "author": "Collaborative Code Editor",
-  "license": "MIT"
-}`,
+.features ul {
+  list-style: none;
+  padding: 0;
+}
 
-          'README.md': `# Node.js Collaborative API
+.features li {
+  margin: 10px 0;
+  font-size: 1.1em;
+}
 
-A modern Express.js REST API with CRUD operations.
+.input-section {
+  margin: 20px 0;
+}
 
-## Features
+.collaborative-input {
+  padding: 12px 16px;
+  font-size: 16px;
+  border: 2px solid #61dafb;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  min-width: 300px;
+}
 
-- RESTful API endpoints
-- CORS enabled
-- JSON responses
-- Error handling
-- Health checks
-- Real-time ready
+.collaborative-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
 
-## Installation
+.collaborators {
+  margin-top: 20px;
+}
 
-1. Install dependencies:
-   npm install
+.collaborator-badge {
+  display: inline-block;
+  background: #61dafb;
+  color: #282c34;
+  padding: 4px 8px;
+  margin: 4px;
+  border-radius: 16px;
+  font-size: 0.8em;
+  font-weight: bold;
+}
 
-2. Start development server:
-   npm run dev
+/* Animation for real-time feel */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
 
-3. Start production server:
-   npm start
-
-## API Endpoints
-
-### Users Management
-- GET /api/users - Get all users
-- POST /api/users - Create new user
-- GET /api/users/:id - Get specific user
-- PUT /api/users/:id - Update user
-- DELETE /api/users/:id - Delete user
-
-### System
-- GET / - API documentation
-- GET /health - Health check
-
-## Usage Examples
-
-### Get All Users
-curl http://localhost:3000/api/users
-
-### Create User
-curl -X POST http://localhost:3000/api/users \\
-  -H "Content-Type: application/json" \\
-  -d '{"name": "John Doe", "email": "john@example.com", "role": "user"}'
-
-### Update User
-curl -X PUT http://localhost:3000/api/users/1 \\
-  -H "Content-Type: application/json" \\
-  -d '{"name": "John Updated", "role": "admin"}'
-
-### Delete User
-curl -X DELETE http://localhost:3000/api/users/1
-
-Built with Express.js for real-time collaboration!`
+.collaborative-input:focus {
+  animation: pulse 1s infinite;
+  outline: none;
+  box-shadow: 0 0 10px rgba(97, 218, 251, 0.5);
+}
+`
         }
-      },
+      ],
 
-      python: {
-        name: 'Python Flask API',
-        description: 'Flask web application with RESTful API',
-        icon: 'Python',
-        files: {
-          'app.py': `from flask import Flask, request, jsonify
-import os
+      python: [
+        {
+          name: 'main.py',
+          path: 'main.py',
+          type: 'file',
+          language: 'python',
+          content: `"""
+Welcome to your collaborative Python project! 🐍
+
+This is your main application file where you can start building
+amazing things with your team in real-time.
+"""
+
+import sys
 from datetime import datetime
 
-app = Flask(__name__)
 
-# Sample data
-users = [
-    {"id": 1, "name": "John Doe", "email": "john@example.com", "role": "admin"},
-    {"id": 2, "name": "Jane Smith", "email": "jane@example.com", "role": "user"},
-    {"id": 3, "name": "Bob Johnson", "email": "bob@example.com", "role": "user"}
-]
+def greet(name="World"):
+    """
+    A simple greeting function to get you started.
+    
+    Args:
+        name (str): The name to greet
+        
+    Returns:
+        str: A formatted greeting message
+    """
+    return f"Hello, {name}! Welcome to collaborative Python development! 🎉"
 
-@app.route('/')
-def home():
-    """API documentation endpoint"""
-    return jsonify({
-        "message": "Welcome to the Flask Collaborative API!",
-        "version": "1.0.0",
-        "endpoints": {
-            "users": "/api/users",
-            "health": "/health"
-        }
-    })
 
-@app.route('/api/users', methods=['GET'])
-def get_users():
-    """Get all users"""
-    return jsonify({
-        "success": True,
-        "data": users,
-        "count": len(users)
-    })
-
-@app.route('/api/users/<int:user_id>', methods=['GET'])
-def get_user(user_id):
-    """Get specific user by ID"""
-    user = next((u for u in users if u["id"] == user_id), None)
-    
-    if not user:
-        return jsonify({
-            "success": False,
-            "message": "User not found"
-        }), 404
-    
-    return jsonify({
-        "success": True,
-        "data": user
-    })
-
-@app.route('/api/users', methods=['POST'])
-def create_user():
-    """Create new user"""
-    data = request.get_json()
-    
-    if not data or not data.get('name') or not data.get('email'):
-        return jsonify({
-            "success": False,
-            "message": "Name and email are required"
-        }), 400
-    
-    new_user = {
-        "id": max(u["id"] for u in users) + 1 if users else 1,
-        "name": data["name"],
-        "email": data["email"],
-        "role": data.get("role", "user")
-    }
-    
-    users.append(new_user)
-    
-    return jsonify({
-        "success": True,
-        "data": new_user,
-        "message": "User created successfully"
-    }), 201
-
-@app.route('/api/users/<int:user_id>', methods=['PUT'])
-def update_user(user_id):
-    """Update user by ID"""
-    user = next((u for u in users if u["id"] == user_id), None)
-    
-    if not user:
-        return jsonify({
-            "success": False,
-            "message": "User not found"
-        }), 404
-    
-    data = request.get_json()
-    
-    if data.get('name'):
-        user['name'] = data['name']
-    if data.get('email'):
-        user['email'] = data['email']
-    if data.get('role'):
-        user['role'] = data['role']
-    
-    return jsonify({
-        "success": True,
-        "data": user,
-        "message": "User updated successfully"
-    })
-
-@app.route('/api/users/<int:user_id>', methods=['DELETE'])
-def delete_user(user_id):
-    """Delete user by ID"""
-    global users
-    user = next((u for u in users if u["id"] == user_id), None)
-    
-    if not user:
-        return jsonify({
-            "success": False,
-            "message": "User not found"
-        }), 404
-    
-    users = [u for u in users if u["id"] != user_id]
-    
-    return jsonify({
-        "success": True,
-        "message": "User deleted successfully"
-    })
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
+def get_system_info():
+    """Get basic system information."""
+    return {
+        "python_version": sys.version,
         "timestamp": datetime.now().isoformat(),
-        "version": "1.0.0",
-        "users_count": len(users)
-    })
-
-@app.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors"""
-    return jsonify({
-        "success": False,
-        "message": "Endpoint not found",
-        "available_endpoints": [
-            "/",
-            "/api/users",
-            "/health"
-        ]
-    }), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors"""
-    return jsonify({
-        "success": False,
-        "message": "Internal server error"
-    }), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    print(f"Starting Flask server on port {port}")
-    print(f"Python Flask Collaborative Application")
-    print(f"Created with Collaborative Code Editor")
-    
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=debug
-    )`,
-
-          'requirements.txt': `Flask==2.3.3
-python-dotenv==1.0.0
-gunicorn==21.2.0`,
-
-          'README.md': `# Python Flask Collaborative API
-
-A modern Flask web application with RESTful API design.
-
-## Features
-
-- RESTful API - Full CRUD operations
-- Error Handling - Comprehensive error responses
-- JSON Responses - Clean, structured data
-- Health Checks - System monitoring
-- Real-time Ready - Built for collaboration
-
-## Installation
-
-1. Create virtual environment:
-   python -m venv venv
-
-2. Activate virtual environment:
-   # Windows
-   venv\\Scripts\\activate
-   # macOS/Linux
-   source venv/bin/activate
-
-3. Install dependencies:
-   pip install -r requirements.txt
-
-4. Run the application:
-   python app.py
-
-## API Endpoints
-
-### Users Management
-- GET /api/users - Get all users
-- POST /api/users - Create new user
-- GET /api/users/<id> - Get specific user
-- PUT /api/users/<id> - Update user
-- DELETE /api/users/<id> - Delete user
-
-### System
-- GET / - API documentation
-- GET /health - Health check
-
-## Usage Examples
-
-### Get All Users
-curl http://localhost:5000/api/users
-
-### Create User
-curl -X POST http://localhost:5000/api/users \\
-  -H "Content-Type: application/json" \\
-  -d '{"name": "John Doe", "email": "john@example.com", "role": "user"}'
-
-### Update User
-curl -X PUT http://localhost:5000/api/users/1 \\
-  -H "Content-Type: application/json" \\
-  -d '{"name": "John Updated", "role": "admin"}'
-
-### Delete User
-curl -X DELETE http://localhost:5000/api/users/1
-
-## Response Format
-
-### Success Response
-{
-  "success": true,
-  "data": {...},
-  "message": "Operation successful"
-}
-
-### Error Response
-{
-  "success": false,
-  "message": "Error description"
-}
-
-## Production Deployment
-
-### Using Gunicorn
-gunicorn app:app
-
-### Environment Variables
-- PORT - Server port (default: 5000)
-- FLASK_ENV - Environment (development/production)
-
-## Development
-
-### Project Structure
-├── app.py              # Main Flask application
-├── requirements.txt    # Python dependencies
-└── README.md          # This documentation
-
-### Adding Features
-1. New endpoints - Add routes in app.py
-2. Database - Add SQLAlchemy for persistence
-3. Authentication - Implement JWT or session auth
-4. Validation - Add input validation with Marshmallow
-
-## Features to Add
-
-- [ ] Database integration (SQLAlchemy)
-- [ ] User authentication (JWT)
-- [ ] Input validation
-- [ ] API rate limiting
-- [ ] Swagger documentation
-- [ ] Unit tests
-- [ ] Docker support
-
-Built with love and Flask! Ready for real-time collaboration.`
-        }
-      }
-    };
-  }
-
-  async createProject(projectType, projectName, targetPath) {
-    try {
-      console.log(`Creating ${projectType} project: ${projectName} at ${targetPath}`);
-      
-      const template = this.templates[projectType];
-      if (!template) {
-        throw new Error(`Template for ${projectType} not found`);
-      }
-
-      const projectPath = path.join(targetPath, projectName);
-      
-      // Create project directory
-      await fs.mkdir(projectPath, { recursive: true });
-      
-      // Create all files from template
-      for (const [filePath, content] of Object.entries(template.files)) {
-        const fullFilePath = path.join(projectPath, filePath);
-        const fileDir = path.dirname(fullFilePath);
-        
-        // Ensure directory exists
-        await fs.mkdir(fileDir, { recursive: true });
-        
-        // Replace placeholders in content
-        let processedContent = content
-          .replace(/{PROJECT_NAME}/g, projectName)
-          .replace(/{PROJECT_NAME_LOWER}/g, projectName.toLowerCase());
-        
-        // Write file
-        await fs.writeFile(fullFilePath, processedContent, 'utf8');
-      }
-
-      return {
-        success: true,
-        projectPath,
-        message: `${template.name} project "${projectName}" created successfully!`,
-        filesCreated: Object.keys(template.files).length
-      };
-
-    } catch (error) {
-      console.error('Error creating project:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+        "platform": sys.platform
     }
+
+
+class CollaborativeProject:
+    """Main project class for collaborative development."""
+    
+    def __init__(self, project_name="My Awesome Project"):
+        self.project_name = project_name
+        self.collaborators = []
+        self.created_at = datetime.now()
+        
+    def add_collaborator(self, name):
+        """Add a new collaborator to the project."""
+        self.collaborators.append({
+            "name": name,
+            "joined_at": datetime.now()
+        })
+        print(f"✅ {name} joined the project!")
+        
+    def get_project_info(self):
+        """Get project information."""
+        return {
+            "name": self.project_name,
+            "collaborators": len(self.collaborators),
+            "created": self.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+
+if __name__ == "__main__":
+    # Welcome message
+    print("🚀 Starting collaborative Python project...")
+    print(greet())
+    
+    # Create project instance
+    project = CollaborativeProject("Collaborative Code Editor")
+    
+    # Add some example collaborators
+    project.add_collaborator("Developer 1")
+    
+    # Display project info
+    info = project.get_project_info()
+    print(f"\\n📊 Project: {info['name']}")
+    print(f"👥 Collaborators: {info['collaborators']}")
+    print(f"📅 Created: {info['created']}")
+    
+    # System info
+    sys_info = get_system_info()
+    print(f"\\n🐍 Python: {sys_info['python_version'].split()[0]}")
+    print(f"⚡ Platform: {sys_info['platform']}")
+    
+    print("\\n✨ Happy collaborative coding! ✨")
+`
+        },
+        {
+          name: 'requirements.txt',
+          path: 'requirements.txt',
+          type: 'file',
+          language: 'text',
+          content: `# Project dependencies
+# Add your Python packages here
+
+# Development tools
+pytest>=7.0.0
+black>=22.0.0
+flake8>=4.0.0
+
+# Common useful packages
+requests>=2.28.0
+python-dotenv>=0.19.0
+
+# Example data science packages (uncomment if needed)
+# numpy>=1.21.0
+# pandas>=1.4.0
+# matplotlib>=3.5.0
+
+# Example web framework (uncomment if needed)
+# flask>=2.0.0
+# fastapi>=0.75.0
+`
+        },
+        {
+          name: 'utils.py',
+          path: 'src/utils.py',
+          type: 'file',
+          language: 'python',
+          content: `"""
+Utility functions for the collaborative project.
+
+This module contains helper functions that can be used
+throughout your project.
+"""
+
+import json
+import time
+from datetime import datetime
+from typing import Dict, List, Any
+
+
+def timestamp():
+    """Get current timestamp in ISO format."""
+    return datetime.now().isoformat()
+
+
+def load_json_file(file_path: str) -> Dict[str, Any]:
+    """
+    Load and parse a JSON file.
+    
+    Args:
+        file_path (str): Path to the JSON file
+        
+    Returns:
+        Dict[str, Any]: Parsed JSON data
+    """
+    try:
+        with open(file_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"❌ File not found: {file_path}")
+        return {}
+    except json.JSONDecodeError:
+        print(f"❌ Invalid JSON in file: {file_path}")
+        return {}
+
+
+def save_json_file(data: Dict[str, Any], file_path: str) -> bool:
+    """
+    Save data to a JSON file.
+    
+    Args:
+        data (Dict[str, Any]): Data to save
+        file_path (str): Path to save the file
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"❌ Error saving file: {e}")
+        return False
+
+
+def format_file_size(size_bytes: int) -> str:
+    """
+    Format file size in human readable format.
+    
+    Args:
+        size_bytes (int): File size in bytes
+        
+    Returns:
+        str: Formatted file size
+    """
+    if size_bytes == 0:
+        return "0 B"
+    
+    size_names = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    
+    return f"{size_bytes:.1f} {size_names[i]}"
+
+
+def timer(func):
+    """
+    Decorator to measure function execution time.
+    
+    Args:
+        func: Function to time
+        
+    Returns:
+        Function wrapper
+    """
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"⏱️  {func.__name__} executed in {execution_time:.4f} seconds")
+        return result
+    return wrapper
+
+
+class Logger:
+    """Simple logger for collaborative projects."""
+    
+    def __init__(self, name: str = "CollabProject"):
+        self.name = name
+        
+    def log(self, message: str, level: str = "INFO"):
+        """Log a message with timestamp."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] [{level}] {self.name}: {message}")
+        
+    def info(self, message: str):
+        """Log info message."""
+        self.log(message, "INFO")
+        
+    def error(self, message: str):
+        """Log error message."""
+        self.log(message, "ERROR")
+        
+    def warning(self, message: str):
+        """Log warning message."""
+        self.log(message, "WARNING")
+
+
+# Example usage
+if __name__ == "__main__":
+    logger = Logger("Utils")
+    logger.info("Utils module loaded successfully! 🎉")
+    
+    # Test timer decorator
+    @timer
+    def example_function():
+        time.sleep(0.1)
+        return "Function completed"
+    
+    result = example_function()
+    logger.info(f"Result: {result}")
+`
+        }
+      ]
+    };
+
+    return templates[templateType] || templates.javascript;
   }
 
-  getAvailableTemplates() {
-    return Object.keys(this.templates).map(key => ({
-      value: key,
-      name: this.templates[key].name,
-      description: this.templates[key].description,
-      icon: this.templates[key].icon,
-      filesCount: Object.keys(this.templates[key].files).length
-    }));
-  }
-
-  getTemplate(templateType) {
-    return this.templates[templateType] || null;
+  // Get available template types
+  static getAvailableTemplates() {
+    return [
+      {
+        id: 'javascript',
+        name: 'JavaScript Project',
+        description: 'Basic JavaScript project with examples and utilities',
+        icon: '📄'
+      },
+      {
+        id: 'react',
+        name: 'React Application',
+        description: 'React project with components and collaborative features',
+        icon: '⚛️'
+      },
+      {
+        id: 'python',
+        name: 'Python Project',
+        description: 'Python project with utilities and best practices',
+        icon: '🐍'
+      }
+    ];
   }
 }
 
