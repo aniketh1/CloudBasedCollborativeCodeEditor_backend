@@ -4,6 +4,71 @@ const File = require('../models/File');
 const Project = require('../models/Project');
 const { auth } = require('../middleware/auth');
 
+// Get file structure for a room (used by FileExplorer)
+router.get('/structure/:roomId', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    
+    console.log(`📂 Getting file structure for room: ${roomId}`);
+    
+    // Find project by roomId
+    const project = await Project.findByRoomId(roomId);
+    if (!project) {
+      console.log(`⚠️ Project not found for roomId: ${roomId}`);
+      return res.status(404).json({ 
+        success: false,
+        error: 'Project not found for this room' 
+      });
+    }
+    
+    console.log(`✅ Found project: ${project.projectId}`);
+    
+    // Get all files for this project
+    const files = await File.findByProjectId(project.projectId);
+    
+    console.log(`📄 Found ${files.length} files`);
+    
+    // Build file structure
+    const structure = {
+      files: files
+        .filter(f => f.type === 'file')
+        .map(f => ({
+          id: f.fileId,
+          name: f.name,
+          path: f.path,
+          type: 'file',
+          language: f.language,
+          size: f.size,
+          parentFolderId: f.parentId,
+          createdAt: f.createdAt,
+          updatedAt: f.updatedAt
+        })),
+      folders: files
+        .filter(f => f.type === 'directory')
+        .map(f => ({
+          id: f.fileId,
+          name: f.name,
+          path: f.path,
+          type: 'folder',
+          parentFolderId: f.parentId,
+          createdAt: f.createdAt,
+          updatedAt: f.updatedAt
+        }))
+    };
+    
+    res.json({
+      success: true,
+      structure
+    });
+  } catch (error) {
+    console.error('❌ Error fetching file structure:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch file structure' 
+    });
+  }
+});
+
 // Get project file structure
 router.get('/:projectId', auth, async (req, res) => {
   try {
