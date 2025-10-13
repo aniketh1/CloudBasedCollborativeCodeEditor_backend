@@ -15,6 +15,7 @@ router.get('/', auth, async (req, res) => {
       success: true,
       projects: projects.map(project => ({
         projectId: project.projectId,
+        roomId: project.roomId,
         name: project.name,
         description: project.description,
         template: project.template,
@@ -64,6 +65,7 @@ router.get('/:projectId', auth, async (req, res) => {
       success: true,
       project: {
         projectId: project.projectId,
+        roomId: project.roomId,
         name: project.name,
         description: project.description,
         template: project.template,
@@ -91,6 +93,24 @@ router.get('/:projectId', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch project'
+    });
+  }
+});
+
+// Get available project templates (alias for /templates/list)
+router.get('/templates', async (req, res) => {
+  try {
+    const templates = ProjectTemplateService.getAvailableTemplates();
+
+    res.json({
+      success: true,
+      templates
+    });
+  } catch (error) {
+    console.error('Error fetching templates:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch templates'
     });
   }
 });
@@ -166,6 +186,7 @@ router.post('/', auth, async (req, res) => {
       message: 'Project created successfully',
       project: {
         projectId: project.projectId,
+        roomId: project.roomId,
         name: project.name,
         description: project.description,
         template: project.template,
