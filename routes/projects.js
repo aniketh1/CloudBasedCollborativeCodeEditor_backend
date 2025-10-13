@@ -187,7 +187,7 @@ router.post('/', auth, async (req, res) => {
     const files = await File.findByProjectId(project.projectId);
     const fileTree = await File.getFileTree(project.projectId);
 
-    res.status(201).json({
+    const responseData = {
       success: true,
       message: 'Project created successfully',
       project: {
@@ -209,7 +209,11 @@ router.post('/', auth, async (req, res) => {
         })),
         fileTree
       }
-    });
+    };
+    
+    console.log('📤 Sending response with roomId:', responseData.project.roomId);
+    
+    res.status(201).json(responseData);
   } catch (error) {
     console.error('Error creating project:', error);
     
