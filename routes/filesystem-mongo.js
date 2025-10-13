@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const fileSystemService = require('../services/FileSystemService');
+const NativeFile = require('../models/File');
 
 // Error handling wrapper
 const asyncHandler = (fn) => (req, res, next) => {
@@ -24,6 +25,47 @@ router.get('/structure/:roomId', asyncHandler(async (req, res) => {
   res.json({
     success: true,
     structure
+  });
+}));
+
+// Get file content by fileId (supports S3 files)
+router.get('/file/:fileId', asyncHandler(async (req, res) => {
+  const { fileId } = req.params;
+  
+  if (!fileId) {
+    return res.status(400).json({
+      success: false,
+      error: 'File ID is required'
+    });
+  }
+
+  console.log(`📄 Getting file content for fileId: ${fileId}`);
+  
+  // Use native File model to get content (handles S3 automatically)
+  const file = await NativeFile.findById(fileId);
+  
+  if (!file) {
+    console.log(`⚠️ File not found: ${fileId}`);
+    return res.status(404).json({
+      success: false,
+      error: 'File not found'
+    });
+  }
+  
+  console.log(`✅ Found file: ${file.name} (storage: ${file.storageType})`);
+  
+  res.json({
+    success: true,
+    file: {
+      id: file.fileId,
+      name: file.name,
+      path: file.path,
+      content: file.content,
+      language: file.language,
+      type: file.type,
+      size: file.size,
+      updatedAt: file.updatedAt
+    }
   });
 }));
 
