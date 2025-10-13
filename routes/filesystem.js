@@ -23,38 +23,45 @@ router.get('/structure/:roomId', async (req, res) => {
     
     console.log(`✅ Found project: ${project.projectId}`);
     
-    // Get all files for this project
+    // Get all files for this project (without loading content)
     const files = await File.findByProjectId(project.projectId);
     
-    console.log(`📄 Found ${files.length} files`);
+    console.log(`📄 Found ${files.length} files for project ${project.projectId}`);
+    console.log(`📝 File types:`, files.map(f => `${f.name} (${f.type})`));
     
     // Build file structure
+    const filesList = files
+      .filter(f => f.type === 'file')
+      .map(f => ({
+        id: f.fileId,
+        name: f.name,
+        path: f.path,
+        type: 'file',
+        language: f.language,
+        size: f.size,
+        parentFolderId: f.parentId,
+        createdAt: f.createdAt,
+        updatedAt: f.updatedAt
+      }));
+      
+    const foldersList = files
+      .filter(f => f.type === 'directory')
+      .map(f => ({
+        id: f.fileId,
+        name: f.name,
+        path: f.path,
+        type: 'folder',
+        parentFolderId: f.parentId,
+        createdAt: f.createdAt,
+        updatedAt: f.updatedAt
+      }));
+    
     const structure = {
-      files: files
-        .filter(f => f.type === 'file')
-        .map(f => ({
-          id: f.fileId,
-          name: f.name,
-          path: f.path,
-          type: 'file',
-          language: f.language,
-          size: f.size,
-          parentFolderId: f.parentId,
-          createdAt: f.createdAt,
-          updatedAt: f.updatedAt
-        })),
-      folders: files
-        .filter(f => f.type === 'directory')
-        .map(f => ({
-          id: f.fileId,
-          name: f.name,
-          path: f.path,
-          type: 'folder',
-          parentFolderId: f.parentId,
-          createdAt: f.createdAt,
-          updatedAt: f.updatedAt
-        }))
+      files: filesList,
+      folders: foldersList
     };
+    
+    console.log(`📊 Returning structure: ${filesList.length} files, ${foldersList.length} folders`);
     
     res.json({
       success: true,
