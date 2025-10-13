@@ -162,6 +162,12 @@ router.post('/', auth, async (req, res) => {
     };
 
     const project = await Project.create(projectData);
+    
+    console.log('📋 Created project object:', {
+      projectId: project.projectId,
+      roomId: project.roomId,
+      name: project.name
+    });
 
     // Create default template files
     try {
