@@ -1,6 +1,7 @@
 const { ObjectId } = require('mongodb');
 const { v4: uuidv4 } = require('uuid');
 const { getDatabase } = require('../config/database');
+const s3Service = require('../services/S3Service');
 
 class File {
   constructor(data) {
@@ -20,6 +21,12 @@ class File {
     this.isLocked = data.isLocked || false;
     this.lockedBy = data.lockedBy || null;
     this.lockedAt = data.lockedAt || null;
+    
+    // S3 storage fields
+    this.storageType = data.storageType || (process.env.AWS_S3_BUCKET_NAME ? 's3' : 'mongodb');
+    this.s3Key = data.s3Key || null;
+    this.s3Bucket = data.s3Bucket || null;
+    this.s3ETag = data.s3ETag || null;
   }
 
   // Get database connection
@@ -44,22 +51,61 @@ class File {
       throw new Error('File already exists at this path');
     }
     
+    // Upload to S3 if it's a file (not directory) and S3 is configured
+    if (file.type === 'file' && file.storageType === 's3' && file.content) {
+      try {
+        const s3Result = await s3Service.uploadFile(
+          file.projectId,
+          file.path,
+          file.content,
+          file.language ? `text/${file.language}` : 'text/plain'
+        );
+        
+        file.s3Key = s3Result.s3Key;
+        file.s3Bucket = s3Result.bucket;
+        file.s3ETag = s3Result.etag;
+        
+        // Don't store content in MongoDB when using S3
+        file.content = '';
+        
+        console.log(`✅ File uploaded to S3: ${file.path}`);
+      } catch (error) {
+        console.error(`❌ S3 upload failed, falling back to MongoDB:`, error);
+        // Fallback to MongoDB if S3 fails
+        file.storageType = 'mongodb';
+      }
+    }
+    
     const result = await filesCollection.insertOne(file);
     file._id = result.insertedId;
     
-    // Create initial version
-    await this.createVersion(file.fileId, file.content, file.createdBy, 'Initial version');
+    // Create initial version (store in S3 or MongoDB depending on storage type)
+    await this.createVersion(file.fileId, fileData.content || '', file.createdBy, 'Initial version', file.storageType);
     
     return file;
   }
 
   // Get file by ID
-  static async findById(fileId) {
+  static async findById(fileId, includeContent = true) {
     const db = getDatabase();
     const filesCollection = db.collection('files');
     
-    const file = await filesCollection.findOne({ fileId });
-    return file ? new File(file) : null;
+    const fileData = await filesCollection.findOne({ fileId });
+    if (!fileData) return null;
+    
+    const file = new File(fileData);
+    
+    // Fetch content from S3 if stored there
+    if (includeContent && file.storageType === 's3' && file.s3Key && file.type === 'file') {
+      try {
+        file.content = await s3Service.downloadFile(file.s3Key);
+      } catch (error) {
+        console.error(`❌ Failed to fetch content from S3 for ${file.path}:`, error);
+        file.content = '// Error loading file content from S3';
+      }
+    }
+    
+    return file;
   }
 
   // Get files by project ID
@@ -72,17 +118,31 @@ class File {
   }
 
   // Get file by path within project
-  static async findByPath(projectId, path) {
+  static async findByPath(projectId, path, includeContent = true) {
     const db = getDatabase();
     const filesCollection = db.collection('files');
     
-    const file = await filesCollection.findOne({ projectId, path });
-    return file ? new File(file) : null;
+    const fileData = await filesCollection.findOne({ projectId, path });
+    if (!fileData) return null;
+    
+    const file = new File(fileData);
+    
+    // Fetch content from S3 if stored there
+    if (includeContent && file.storageType === 's3' && file.s3Key && file.type === 'file') {
+      try {
+        file.content = await s3Service.downloadFile(file.s3Key);
+      } catch (error) {
+        console.error(`❌ Failed to fetch content from S3 for ${file.path}:`, error);
+        file.content = '// Error loading file content from S3';
+      }
+    }
+    
+    return file;
   }
 
   // Update file content
   async updateContent(content, updatedBy, versionNote = 'Content update') {
-    const db = await File.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     
     // Check if file is locked by another user
@@ -90,25 +150,73 @@ class File {
       throw new Error('File is locked by another user');
     }
     
+    const oldContent = this.content;
     this.content = content;
     this.size = Buffer.byteLength(content, 'utf8');
     this.updatedAt = new Date();
     this.version += 1;
     
-    await filesCollection.updateOne(
-      { fileId: this.fileId },
-      {
-        $set: {
-          content: this.content,
-          size: this.size,
-          updatedAt: this.updatedAt,
-          version: this.version
-        }
+    // Update in S3 if using S3 storage
+    if (this.storageType === 's3' && this.type === 'file') {
+      try {
+        const s3Result = await s3Service.uploadFile(
+          this.projectId,
+          this.path,
+          content,
+          this.language ? `text/${this.language}` : 'text/plain'
+        );
+        
+        this.s3Key = s3Result.s3Key;
+        this.s3ETag = s3Result.etag;
+        
+        // Don't store content in MongoDB
+        await filesCollection.updateOne(
+          { fileId: this.fileId },
+          {
+            $set: {
+              size: this.size,
+              updatedAt: this.updatedAt,
+              version: this.version,
+              s3Key: this.s3Key,
+              s3ETag: this.s3ETag
+            },
+            $unset: { content: '' }
+          }
+        );
+      } catch (error) {
+        console.error(`❌ S3 update failed, using MongoDB:`, error);
+        // Fallback to MongoDB
+        this.storageType = 'mongodb';
+        await filesCollection.updateOne(
+          { fileId: this.fileId },
+          {
+            $set: {
+              content: this.content,
+              size: this.size,
+              updatedAt: this.updatedAt,
+              version: this.version,
+              storageType: 'mongodb'
+            }
+          }
+        );
       }
-    );
+    } else {
+      // MongoDB storage
+      await filesCollection.updateOne(
+        { fileId: this.fileId },
+        {
+          $set: {
+            content: this.content,
+            size: this.size,
+            updatedAt: this.updatedAt,
+            version: this.version
+          }
+        }
+      );
+    }
     
     // Create new version
-    await File.createVersion(this.fileId, content, updatedBy, versionNote);
+    await File.createVersion(this.fileId, content, updatedBy, versionNote, this.storageType);
     
     return this;
   }
@@ -170,33 +278,67 @@ class File {
 
   // Delete file
   async delete() {
-    const db = await File.getDatabase();
+    const db = getDatabase();
     const filesCollection = db.collection('files');
     const versionsCollection = db.collection('fileVersions');
+    
+    // Delete from S3 if stored there
+    if (this.storageType === 's3' && this.s3Key && this.type === 'file') {
+      try {
+        await s3Service.deleteFile(this.s3Key);
+        console.log(`✅ Deleted file from S3: ${this.s3Key}`);
+      } catch (error) {
+        console.error(`❌ Failed to delete from S3:`, error);
+        // Continue with database deletion even if S3 fails
+      }
+    }
     
     // Delete all versions
     await versionsCollection.deleteMany({ fileId: this.fileId });
     
-    // Delete file
+    // Delete file from MongoDB
     await filesCollection.deleteOne({ fileId: this.fileId });
     
     return true;
   }
 
   // Create a new file version
-  static async createVersion(fileId, content, createdBy, note = '') {
+  static async createVersion(fileId, content, createdBy, note = '', storageType = 'mongodb') {
     const db = getDatabase();
     const versionsCollection = db.collection('fileVersions');
     
+    const versionId = uuidv4();
     const version = {
-      versionId: uuidv4(),
+      versionId,
       fileId,
-      content,
+      content: storageType === 'mongodb' ? content : '', // Don't store content for S3 versions
       size: Buffer.byteLength(content, 'utf8'),
       createdBy,
       createdAt: new Date(),
-      note
+      note,
+      storageType,
+      s3Key: null,
+      s3ETag: null
     };
+    
+    // Upload version to S3 if using S3 storage
+    if (storageType === 's3' && content) {
+      try {
+        const s3Result = await s3Service.uploadFile(
+          fileId, // Use fileId as project identifier for versions
+          `versions/${versionId}`,
+          content,
+          'text/plain'
+        );
+        
+        version.s3Key = s3Result.s3Key;
+        version.s3ETag = s3Result.etag;
+      } catch (error) {
+        console.error(`❌ Failed to upload version to S3, storing in MongoDB:`, error);
+        version.storageType = 'mongodb';
+        version.content = content;
+      }
+    }
     
     await versionsCollection.insertOne(version);
     return version;
@@ -221,7 +363,19 @@ class File {
     const versionsCollection = db.collection('fileVersions');
     
     const version = await versionsCollection.findOne({ fileId, versionId });
-    return version ? version.content : null;
+    if (!version) return null;
+    
+    // Fetch from S3 if stored there
+    if (version.storageType === 's3' && version.s3Key) {
+      try {
+        return await s3Service.downloadFile(version.s3Key);
+      } catch (error) {
+        console.error(`❌ Failed to fetch version from S3:`, error);
+        return '// Error loading version content from S3';
+      }
+    }
+    
+    return version.content;
   }
 
   // Create directory

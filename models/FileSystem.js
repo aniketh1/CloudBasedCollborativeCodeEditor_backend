@@ -16,6 +16,24 @@ const fileSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  // S3 storage fields
+  s3Key: {
+    type: String,
+    default: null // S3 object key (e.g., "projects/{projectId}/files/{path}")
+  },
+  s3Bucket: {
+    type: String,
+    default: null // S3 bucket name
+  },
+  s3ETag: {
+    type: String,
+    default: null // S3 ETag for version tracking
+  },
+  storageType: {
+    type: String,
+    enum: ['mongodb', 's3'],
+    default: 'mongodb' // Default to MongoDB for backward compatibility
+  },
   language: {
     type: String,
     default: 'javascript'
@@ -160,7 +178,8 @@ roomSchema.index({ roomId: 1 });
 
 // Pre-save middleware to update file size
 fileSchema.pre('save', function(next) {
-  if (this.isModified('content')) {
+  // Update size if content is modified and stored in MongoDB
+  if (this.isModified('content') && this.storageType === 'mongodb') {
     this.size = Buffer.byteLength(this.content, 'utf8');
   }
   next();
