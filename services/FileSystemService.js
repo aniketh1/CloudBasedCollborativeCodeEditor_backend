@@ -1,4 +1,6 @@
-const { File, Folder, Room } = require('../models/FileSystem');
+const { File: MongooseFile, Folder, Room } = require('../models/FileSystem');
+const NativeFile = require('../models/File');
+const Project = require('../models/Project');
 const path = require('path');
 
 // MongoDB-based file system service for collaborative editing
@@ -119,34 +121,59 @@ main();`,
   // Get complete file structure for a room
   async getFileStructure(roomId) {
     try {
-      const [files, folders] = await Promise.all([
-        File.find({ roomId, isDeleted: false }).sort({ path: 1 }),
-        Folder.find({ roomId, isDeleted: false }).sort({ path: 1 })
-      ]);
-
-      return {
-        files: files.map(file => ({
-          id: file._id,
+      console.log(`📂 [FileSystemService] Getting structure for room: ${roomId}`);
+      
+      // Find project by roomId using native File model
+      const project = await Project.findByRoomId(roomId);
+      if (!project) {
+        console.log(`⚠️ [FileSystemService] Project not found for roomId: ${roomId}`);
+        return { files: [], folders: [] };
+      }
+      
+      console.log(`✅ [FileSystemService] Found project: ${project.projectId}`);
+      
+      // Get files using native File model with projectId
+      const files = await NativeFile.findByProjectId(project.projectId);
+      console.log(`📄 [FileSystemService] Found ${files.length} files for project ${project.projectId}`);
+      
+      if (files.length > 0) {
+        console.log(`📝 [FileSystemService] File types:`, files.map(f => `${f.name} (${f.type})`));
+      }
+      
+      // Separate files and folders
+      const filesList = files
+        .filter(f => f.type === 'file')
+        .map(file => ({
+          id: file.fileId,
           name: file.name,
           path: file.path,
           type: 'file',
           language: file.language,
           size: file.size,
-          parentFolderId: file.parentFolderId,
+          parentFolderId: file.parentId,
           lastModified: file.updatedAt,
-          lastModifiedBy: file.lastModifiedBy
-        })),
-        folders: folders.map(folder => ({
-          id: folder._id,
+          lastModifiedBy: file.createdBy
+        }));
+        
+      const foldersList = files
+        .filter(f => f.type === 'directory')
+        .map(folder => ({
+          id: folder.fileId,
           name: folder.name,
           path: folder.path,
           type: 'folder',
-          parentFolderId: folder.parentFolderId,
+          parentFolderId: folder.parentId,
           createdBy: folder.createdBy
-        }))
+        }));
+      
+      console.log(`📊 [FileSystemService] Returning: ${filesList.length} files, ${foldersList.length} folders`);
+      
+      return {
+        files: filesList,
+        folders: foldersList
       };
     } catch (error) {
-      console.error('Error getting file structure:', error);
+      console.error('❌ [FileSystemService] Error getting file structure:', error);
       return { files: [], folders: [] };
     }
   }
