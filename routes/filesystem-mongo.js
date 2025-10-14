@@ -69,6 +69,53 @@ router.get('/file/:fileId', asyncHandler(async (req, res) => {
   });
 }));
 
+// Update file content by fileId (supports S3 files)
+router.put('/file/:fileId', asyncHandler(async (req, res) => {
+  const { fileId } = req.params;
+  const { content } = req.body;
+  
+  if (!fileId) {
+    return res.status(400).json({
+      success: false,
+      error: 'File ID is required'
+    });
+  }
+  
+  if (content === undefined) {
+    return res.status(400).json({
+      success: false,
+      error: 'Content is required'
+    });
+  }
+
+  console.log(`💾 Saving file content for fileId: ${fileId} (${content?.length || 0} chars)`);
+  
+  // Use native File model to update content (handles S3 automatically)
+  const updatedFile = await NativeFile.updateContent(fileId, content);
+  
+  if (!updatedFile) {
+    console.log(`⚠️ Failed to update file: ${fileId}`);
+    return res.status(404).json({
+      success: false,
+      error: 'File not found or update failed'
+    });
+  }
+  
+  console.log(`✅ Saved file: ${updatedFile.name} to ${updatedFile.storageType}`);
+  
+  res.json({
+    success: true,
+    file: {
+      id: updatedFile.fileId,
+      name: updatedFile.name,
+      path: updatedFile.path,
+      size: updatedFile.size,
+      updatedAt: updatedFile.updatedAt,
+      storageType: updatedFile.storageType
+    }
+  });
+}));
+
 // Get file content using POST to send path in body
 router.post('/get-file/:roomId', asyncHandler(async (req, res) => {
   const { roomId } = req.params;
