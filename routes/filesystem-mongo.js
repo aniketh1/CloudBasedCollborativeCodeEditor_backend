@@ -90,30 +90,41 @@ router.put('/file/:fileId', asyncHandler(async (req, res) => {
 
   console.log(`💾 Saving file content for fileId: ${fileId} (${content?.length || 0} chars)`);
   
-  // Use native File model to update content (handles S3 automatically)
-  const updatedFile = await NativeFile.updateContent(fileId, content);
-  
-  if (!updatedFile) {
-    console.log(`⚠️ Failed to update file: ${fileId}`);
-    return res.status(404).json({
+  try {
+    // Find the file first
+    const file = await NativeFile.findById(fileId);
+    
+    if (!file) {
+      console.log(`⚠️ File not found: ${fileId}`);
+      return res.status(404).json({
+        success: false,
+        error: 'File not found'
+      });
+    }
+    
+    // Update content using instance method
+    await file.updateContent(content, 'mock-user-id', 'Auto-save from editor');
+    
+    console.log(`✅ Saved file: ${file.name} to ${file.storageType}`);
+    
+    res.json({
+      success: true,
+      file: {
+        id: file.fileId,
+        name: file.name,
+        path: file.path,
+        size: file.size,
+        updatedAt: file.updatedAt,
+        storageType: file.storageType
+      }
+    });
+  } catch (error) {
+    console.error(`❌ Error updating file ${fileId}:`, error);
+    res.status(500).json({
       success: false,
-      error: 'File not found or update failed'
+      error: error.message || 'Failed to update file'
     });
   }
-  
-  console.log(`✅ Saved file: ${updatedFile.name} to ${updatedFile.storageType}`);
-  
-  res.json({
-    success: true,
-    file: {
-      id: updatedFile.fileId,
-      name: updatedFile.name,
-      path: updatedFile.path,
-      size: updatedFile.size,
-      updatedAt: updatedFile.updatedAt,
-      storageType: updatedFile.storageType
-    }
-  });
 }));
 
 // Get file content using POST to send path in body
