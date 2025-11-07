@@ -90,19 +90,43 @@ class File {
     const db = getDatabase();
     const filesCollection = db.collection('files');
     
+    console.log(`🔍 [File.findById] Looking for fileId: ${fileId}, includeContent: ${includeContent}`);
+    
     const fileData = await filesCollection.findOne({ fileId });
-    if (!fileData) return null;
+    if (!fileData) {
+      console.log(`❌ [File.findById] File not found in database: ${fileId}`);
+      return null;
+    }
+    
+    console.log(`✅ [File.findById] Found file in DB:`, {
+      fileId: fileData.fileId,
+      name: fileData.name,
+      path: fileData.path,
+      storageType: fileData.storageType,
+      type: fileData.type,
+      s3Key: fileData.s3Key,
+      hasContent: !!fileData.content
+    });
     
     const file = new File(fileData);
     
     // Fetch content from S3 if stored there
     if (includeContent && file.storageType === 's3' && file.s3Key && file.type === 'file') {
       try {
+        console.log(`☁️ [File.findById] Fetching from S3: ${file.s3Key}`);
         file.content = await s3Service.downloadFile(file.s3Key);
+        console.log(`✅ [File.findById] S3 content fetched, length: ${file.content?.length || 0}`);
       } catch (error) {
-        console.error(`❌ Failed to fetch content from S3 for ${file.path}:`, error);
+        console.error(`❌ [File.findById] Failed to fetch content from S3 for ${file.path}:`, error);
+        console.error(`❌ [File.findById] Error details:`, {
+          message: error.message,
+          code: error.code,
+          statusCode: error.statusCode
+        });
         file.content = '// Error loading file content from S3';
       }
+    } else if (includeContent && file.type === 'file') {
+      console.log(`📄 [File.findById] Using MongoDB content, length: ${file.content?.length || 0}`);
     }
     
     return file;

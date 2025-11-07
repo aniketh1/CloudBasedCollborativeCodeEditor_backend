@@ -12,15 +12,25 @@ const asyncHandler = (fn) => (req, res, next) => {
 router.get('/structure/:roomId', asyncHandler(async (req, res) => {
   const { roomId } = req.params;
   
+  console.log(`🔍 [ROUTE] GET /api/filesystem/structure/${roomId}`);
+  console.log(`🔍 [ROUTE] Request headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🔍 [ROUTE] Request origin:`, req.headers.origin || 'No origin header');
+  
   if (!roomId) {
+    console.log(`❌ [ROUTE] Missing roomId`);
     return res.status(400).json({
       success: false,
       error: 'Room ID is required'
     });
   }
 
-  console.log(`Getting file structure for room: ${roomId}`);
+  console.log(`📂 [ROUTE] Getting file structure for room: ${roomId}`);
   const structure = await fileSystemService.getFileStructure(roomId);
+  
+  console.log(`✅ [ROUTE] Structure retrieved:`, {
+    filesCount: structure.files?.length || 0,
+    foldersCount: structure.folders?.length || 0
+  });
   
   res.json({
     success: true,
@@ -32,27 +42,40 @@ router.get('/structure/:roomId', asyncHandler(async (req, res) => {
 router.get('/file/:fileId', asyncHandler(async (req, res) => {
   const { fileId } = req.params;
   
+  console.log(`🔍 [ROUTE] GET /api/filesystem/file/${fileId}`);
+  console.log(`🔍 [ROUTE] Request headers:`, JSON.stringify(req.headers, null, 2));
+  console.log(`🔍 [ROUTE] Request origin:`, req.headers.origin || 'No origin header');
+  
   if (!fileId) {
+    console.log(`❌ [ROUTE] Missing fileId`);
     return res.status(400).json({
       success: false,
       error: 'File ID is required'
     });
   }
 
-  console.log(`📄 Getting file content for fileId: ${fileId}`);
+  console.log(`📄 [ROUTE] Getting file content for fileId: ${fileId}`);
   
   // Use native File model to get content (handles S3 automatically)
   const file = await NativeFile.findById(fileId);
   
   if (!file) {
-    console.log(`⚠️ File not found: ${fileId}`);
+    console.log(`⚠️ [ROUTE] File not found: ${fileId}`);
     return res.status(404).json({
       success: false,
       error: 'File not found'
     });
   }
   
-  console.log(`✅ Found file: ${file.name} (storage: ${file.storageType})`);
+  console.log(`✅ [ROUTE] Found file: ${file.name} (storage: ${file.storageType})`);
+  console.log(`📝 [ROUTE] File details:`, {
+    id: file.fileId,
+    name: file.name,
+    path: file.path,
+    contentLength: file.content?.length || 0,
+    storageType: file.storageType,
+    s3Key: file.s3Key
+  });
   
   res.json({
     success: true,
