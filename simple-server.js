@@ -70,7 +70,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight requests
+// Express 5 compatible - no explicit options handler needed, CORS middleware handles it
 app.use(express.json());
 
 // Error handling middleware for JSON parsing
