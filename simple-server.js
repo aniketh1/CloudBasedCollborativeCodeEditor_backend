@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 // const { Server } = require('socket.io');
 const mongoose = require('mongoose');
-// const { connectDB: connectMongoDB } = require('./config/database');
+const { connectDB: connectMongoDB } = require('./config/database'); // NEED THIS FOR PROJECTS
 // const fileSystemService = require('./services/FileSystemService');
 require('dotenv').config();
 
@@ -18,9 +18,9 @@ const connectDB = async () => {
     await mongoose.connect(mongoURI);
     console.log('✅ Mongoose connected successfully');
     
-    // Connect with native driver for projects
-    // await connectMongoDB();
-    // console.log('✅ Native MongoDB driver connected successfully');
+    // Connect with native driver for projects (REQUIRED - Project model uses this)
+    await connectMongoDB();
+    console.log('✅ Native MongoDB driver connected successfully');
     
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
