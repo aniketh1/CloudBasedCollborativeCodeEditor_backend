@@ -122,11 +122,11 @@ router.get('/:projectId/file/:fileId', auth, async (req, res) => {
   }
 });
 
-// Get file by path
-router.get('/:projectId/path/*', auth, async (req, res) => {
+// Get file by path - Using :path* for Express 5 compatibility
+router.get('/:projectId/path/:path(*)', auth, async (req, res) => {
   try {
-    const { projectId } = req.params;
-    const filePath = req.params[0]; // Everything after /path/
+    const { projectId, path } = req.params;
+    const filePath = path || ''; // The captured path parameter
     
     const file = await File.findByPath(projectId, filePath);
     
