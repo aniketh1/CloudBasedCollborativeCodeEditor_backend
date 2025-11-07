@@ -49,11 +49,28 @@ if (process.env.FRONTEND_URL) {
 const corsOptions = {
   origin: allowedOrigins,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type", 
+    "Authorization",
+    "Cache-Control",
+    "cache-control",
+    "If-None-Match",
+    "if-none-match",
+    "ETag",
+    "etag"
+  ],
+  exposedHeaders: [
+    "ETag",
+    "etag",
+    "Cache-Control",
+    "cache-control"
+  ],
   credentials: true,
+  maxAge: 86400
 };
 
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight requests
 app.use(express.json());
 
 // Error handling middleware for JSON parsing
