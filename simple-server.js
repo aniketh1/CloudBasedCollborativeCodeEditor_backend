@@ -1,10 +1,10 @@
 const express = require('express');
-const http = require('http');
+// const http = require('http');
 const cors = require('cors');
-const { Server } = require('socket.io');
+// const { Server } = require('socket.io');
 const mongoose = require('mongoose');
-const { connectDB: connectMongoDB } = require('./config/database');
-const fileSystemService = require('./services/FileSystemService');
+// const { connectDB: connectMongoDB } = require('./config/database');
+// const fileSystemService = require('./services/FileSystemService');
 require('dotenv').config();
 
 const app = express();
@@ -19,8 +19,8 @@ const connectDB = async () => {
     console.log('✅ Mongoose connected successfully');
     
     // Connect with native driver for projects
-    await connectMongoDB();
-    console.log('✅ Native MongoDB driver connected successfully');
+    // await connectMongoDB();
+    // console.log('✅ Native MongoDB driver connected successfully');
     
   } catch (error) {
     console.error('❌ MongoDB connection error:', error);
@@ -84,14 +84,14 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// API Routes
+// API Routes - ONLY FILE SYSTEM FOR NOW
 const filesystemRoutes = require('./routes/filesystem-mongo');
-const projectRoutes = require('./routes/projects');
-const roomRoutes = require('./routes/rooms');
+// const projectRoutes = require('./routes/projects');
+// const roomRoutes = require('./routes/rooms');
 
 app.use('/api/filesystem', filesystemRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/rooms', roomRoutes);
+// app.use('/api/projects', projectRoutes);
+// app.use('/api/rooms', roomRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -110,6 +110,8 @@ app.use(/^\/api\//, (req, res) => {
   });
 });
 
+// COMMENT OUT SOCKET.IO FOR NOW - FOCUS ON FILE FETCHING ONLY
+/*
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -424,12 +426,13 @@ io.on('connection', async (socket) => {
     }
   });
 });
+*/
 
 const PORT = process.env.PORT || 3001;
 
-server.listen(PORT, '0.0.0.0', () => {
+// Use express app directly instead of http server
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📝 Frontend URL: http://localhost:3000`);
-  console.log(`🔌 Socket.IO ready for real-time collaboration`);
-  console.log(`✨ Features: Character-level sync, Live cursors, Auto-save, 5-user limit`);
+  console.log(`📝 SIMPLE MODE: Only file fetching enabled`);
+  console.log(`🔌 Socket.IO and collaboration features are DISABLED`);
 });
