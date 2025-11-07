@@ -50,6 +50,9 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "If-None-Match", "ETag"],
   exposedHeaders: ["ETag", "Cache-Control"],
   credentials: true,
+  maxAge: 0, // Force immediate CORS preflight revalidation (no caching)
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
