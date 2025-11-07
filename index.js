@@ -46,16 +46,39 @@ const corsOptions = {
     "https://cloud-based-collborative-code-editor.vercel.app",
     "http://localhost:3000", // For development
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "If-None-Match", "ETag"],
-  exposedHeaders: ["ETag", "Cache-Control"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: [
+    "Content-Type", 
+    "Authorization", 
+    "Cache-Control", 
+    "cache-control",  // Add lowercase version for compatibility
+    "If-None-Match", 
+    "if-none-match",  // Add lowercase version for compatibility
+    "ETag",
+    "etag",           // Add lowercase version for compatibility
+    "X-Requested-With",
+    "Accept",
+    "Origin"
+  ],
+  exposedHeaders: [
+    "ETag", 
+    "etag",
+    "Cache-Control", 
+    "cache-control",
+    "X-Total-Count",
+    "Content-Length"
+  ],
   credentials: true,
-  maxAge: 0, // Force immediate CORS preflight revalidation (no caching)
+  maxAge: 86400, // 24 hours - allow browser to cache preflight for better performance
   preflightContinue: false,
   optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
+
+// Explicit preflight handler for all routes
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -108,8 +131,22 @@ const io = new Server(server, {
       "https://cloud-based-collborative-code-editor.vercel.app",
       "http://localhost:3000"
     ],
-    methods: ['GET', 'POST'],
-    credentials: true
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: [
+      "Content-Type", 
+      "Authorization", 
+      "Cache-Control", 
+      "cache-control",
+      "If-None-Match", 
+      "if-none-match",
+      "ETag",
+      "etag",
+      "X-Requested-With",
+      "Accept",
+      "Origin"
+    ],
+    credentials: true,
+    maxAge: 86400
   },
   // Add these for better production performance
   transports: ['websocket', 'polling'],
