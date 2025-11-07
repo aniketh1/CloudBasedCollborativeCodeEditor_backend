@@ -47,7 +47,8 @@ const corsOptions = {
     "http://localhost:3000", // For development
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "If-None-Match", "ETag"],
+  exposedHeaders: ["ETag", "Cache-Control"],
   credentials: true,
 };
 
