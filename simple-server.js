@@ -31,7 +31,9 @@ const connectDB = async () => {
 // Initialize database connection
 connectDB();
 
-// CORS configuration
+// TEMPORARY: Remove CORS restrictions to debug file fetching
+// CORS configuration - COMMENTED OUT FOR DEBUGGING
+/*
 const allowedOrigins = [
   "http://localhost:3000",
   "https://cloud-based-collborative-code-editor.vercel.app",
@@ -70,6 +72,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+*/
+
+// TEMPORARY: Allow ALL origins for debugging
+app.use(cors());
+console.log('⚠️ CORS DISABLED - Allowing all origins for debugging');
+
 // Express 5 compatible - no explicit options handler needed, CORS middleware handles it
 app.use(express.json());
 
