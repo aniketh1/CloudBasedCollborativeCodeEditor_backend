@@ -74,9 +74,27 @@ const corsOptions = {
 app.use(cors(corsOptions));
 */
 
-// TEMPORARY: Allow ALL origins for debugging
-app.use(cors());
-console.log('⚠️ CORS DISABLED - Allowing all origins for debugging');
+// FIXED CORS - Allow all origins with proper headers
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
+  credentials: false // Must be false when origin is '*'
+}));
+
+// Add explicit CORS headers as backup
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+console.log('✅ CORS configured: Allowing all origins');
 
 // Express 5 compatible - no explicit options handler needed, CORS middleware handles it
 app.use(express.json());
