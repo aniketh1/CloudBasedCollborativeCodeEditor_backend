@@ -128,12 +128,15 @@ app.get('/health', (req, res) => {
   });
 });
 
-// 404 handler for API routes - use regex pattern instead of wildcard
-app.use(/^\/api\//, (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: `API endpoint ${req.originalUrl} not found`
-  });
+// 404 handler for API routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      error: `API endpoint ${req.originalUrl} not found`
+    });
+  }
+  next();
 });
 
 // Create HTTP server with Socket.IO for real-time collaboration
