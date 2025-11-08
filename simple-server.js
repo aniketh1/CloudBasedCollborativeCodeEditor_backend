@@ -77,9 +77,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Explicit preflight handler for OPTIONS requests
-app.options('*', cors(corsOptions));
-
 // Add explicit CORS headers as backup
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
