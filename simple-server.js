@@ -107,14 +107,14 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// API Routes - ONLY FILE SYSTEM FOR NOW
+// API Routes - File system, Projects, and Rooms
 const filesystemRoutes = require('./routes/filesystem-mongo');
-// const projectRoutes = require('./routes/projects');
-// const roomRoutes = require('./routes/rooms');
+const projectRoutes = require('./routes/projects');
+const roomRoutes = require('./routes/rooms');
 
 app.use('/api/filesystem', filesystemRoutes);
-// app.use('/api/projects', projectRoutes);
-// app.use('/api/rooms', roomRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/rooms', roomRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
