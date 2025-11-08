@@ -1,7 +1,7 @@
 const express = require('express');
-// const http = require('http');
+const http = require('http');
 const cors = require('cors');
-// const { Server } = require('socket.io');
+const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const { connectDB: connectMongoDB } = require('./config/database'); // NEED THIS FOR PROJECTS
 // const fileSystemService = require('./services/FileSystemService');
@@ -31,62 +31,62 @@ const connectDB = async () => {
 // Initialize database connection
 connectDB();
 
-// TEMPORARY: Remove CORS restrictions to debug file fetching
-// CORS configuration - COMMENTED OUT FOR DEBUGGING
-/*
+// CORS configuration with proper preflight handling
 const allowedOrigins = [
   "http://localhost:3000",
+  "http://localhost:3001",
   "https://cloud-based-collborative-code-editor.vercel.app",
-  "https://collaborative-code-editor-frontend.vercel.app"
-];
-
-// Add environment-specific origins
-if (process.env.CORS_ORIGIN) {
-  allowedOrigins.push(process.env.CORS_ORIGIN);
-}
-if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL);
-}
+  "https://collaborative-code-editor-frontend.vercel.app",
+  process.env.CORS_ORIGIN,
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 const corsOptions = {
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all for debugging
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: [
-    "Content-Type", 
+    "Content-Type",
     "Authorization",
     "Cache-Control",
     "cache-control",
+    "pragma",
+    "Pragma",
     "If-None-Match",
     "if-none-match",
     "ETag",
-    "etag"
+    "etag",
+    "Accept",
+    "Accept-Language"
   ],
   exposedHeaders: [
     "ETag",
     "etag",
     "Cache-Control",
-    "cache-control"
+    "cache-control",
+    "Content-Length"
   ],
-  credentials: true,
+  credentials: false,
   maxAge: 86400
 };
 
 app.use(cors(corsOptions));
-*/
 
-// FIXED CORS - Allow all origins with proper headers
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
-  credentials: false // Must be false when origin is '*'
-}));
+// Explicit preflight handler for OPTIONS requests
+app.options('*', cors(corsOptions));
 
 // Add explicit CORS headers as backup
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, pragma, Pragma, If-None-Match, ETag, Accept, Accept-Language');
+  res.header('Access-Control-Expose-Headers', 'ETag, Cache-Control, Content-Length');
+  res.header('Access-Control-Max-Age', '86400');
   
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -94,7 +94,7 @@ app.use((req, res, next) => {
   next();
 });
 
-console.log('✅ CORS configured: Allowing all origins');
+console.log('✅ CORS configured with preflight support for all headers');
 
 // Express 5 compatible - no explicit options handler needed, CORS middleware handles it
 app.use(express.json());
@@ -136,12 +136,16 @@ app.use(/^\/api\//, (req, res) => {
   });
 });
 
-// COMMENT OUT SOCKET.IO FOR NOW - FOCUS ON FILE FETCHING ONLY
-/*
+// Create HTTP server with Socket.IO for real-time collaboration
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: corsOptions,
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: false
+  },
   transports: ['websocket', 'polling']
 });
 
@@ -452,13 +456,12 @@ io.on('connection', async (socket) => {
     }
   });
 });
-*/
 
 const PORT = process.env.PORT || 3001;
 
-// Use express app directly instead of http server
-app.listen(PORT, '0.0.0.0', () => {
+// Use HTTP server with Socket.IO
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📝 SIMPLE MODE: Only file fetching enabled`);
-  console.log(`🔌 Socket.IO and collaboration features are DISABLED`);
+  console.log(`📝 MODE: File system + Real-time collaboration enabled`);
+  console.log(`🔌 Socket.IO listening on ws://0.0.0.0:${PORT}`);
 });
