@@ -112,8 +112,19 @@ const filesystemRoutes = require('./routes/filesystem-mongo');
 const projectRoutes = require('./routes/projects');
 const roomRoutes = require('./routes/rooms');
 
+// Debug: Test route to verify routing works
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'API routes are working', timestamp: new Date().toISOString() });
+});
+
 app.use('/api/filesystem', filesystemRoutes);
-app.use('/api/projects', projectRoutes);
+
+// Add logging middleware for projects route
+app.use('/api/projects', (req, res, next) => {
+  console.log(`📊 Projects route hit: ${req.method} ${req.url}`);
+  next();
+}, projectRoutes);
+
 app.use('/api/rooms', roomRoutes);
 
 // Health check
